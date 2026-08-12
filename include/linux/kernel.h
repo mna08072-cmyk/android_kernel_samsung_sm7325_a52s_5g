@@ -678,7 +678,7 @@ do {								\
 #define tracing_mark_begin(fmt, args...)			\
 	__tracing_mark(TRACING_MARK_TYPE_BEGIN, fmt, ##args)
 #define tracing_mark_end()					\
-	__tracing_mark(TRACING_MARK_TYPE_END, "")
+	__tracing_mark(TRACING_MARK_TYPE_END, "%s", "")
 #define tracing_mark_end_debug(fmt, args...)			\
 	__tracing_mark(TRACING_MARK_TYPE_END, fmt, ##args)
 void tracing_on(void);
