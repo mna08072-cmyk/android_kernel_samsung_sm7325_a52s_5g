@@ -1533,6 +1533,7 @@ void susfs_try_umount(uid_t uid)
 }
 #endif // #ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
 
+
 /* susfs_init */
 void susfs_init(void) {
 	static_branch_enable(&ksu_init_rc_hook_key_false);
