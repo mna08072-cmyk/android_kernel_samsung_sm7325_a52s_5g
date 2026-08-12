@@ -1,0 +1,63 @@
+name: Build A52s 5G Kernel
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential libc6-dev bc bison flex libssl-dev \
+            libelf-dev cpio kmod rsync python3 curl unzip zip \
+            device-tree-compiler llvm lld clang gcc-aarch64-linux-gnu
+
+      - name: Make build script executable
+        run: chmod +x build_kernel_zip.sh
+
+      - name: Build kernel
+        run: yes "" | ./build_kernel_zip.sh
+
+      - name: Find output zip
+        id: find_zip
+        run: |
+          ZIP_PATH=$(find . -maxdepth 2 -iname "*.zip" -newer build_kernel_zip.sh | head -1)
+          echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
+          echo "Found: ${ZIP_PATH}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: a52s5g-kernel
+          path: ${{ steps.find_zip.outputs.zip_path }}
+          if-no-files-found: error
+
+      - name: Set release tag
+        id: tag
+        run: echo "tag=build-$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "A52s 5G Kernel - ${{ steps.tag.outputs.tag }}"
+          files: ${{ steps.find_zip.outputs.zip_path }}
+          body: |
+            Automated build from branch `${{ github.ref_name }}`
+            Commit: ${{ github.sha }}
