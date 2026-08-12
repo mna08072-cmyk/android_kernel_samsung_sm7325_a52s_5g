@@ -1,4 +1,4 @@
 [submodule "KernelSU-Next"]
 	path = KernelSU-Next
-	url = https://github.com/bone-machine/KernelSU-Next
-	branch = legacy-susfs
+	url = https://github.com/mna08072-cmyk/KernelSU-Next
+	branch = legacy-susfs-updated
