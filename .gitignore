@@ -160,7 +160,9 @@ arch/arm/boot/dts/vendor
 /KernelSU-Next/
 
 # toolchain
-/toolchain/
+/toolchain/*
+!/toolchain/baseimages/
+!/toolchain/baseimages/**
 
 # generated flashable kernel .zip file at root directory
 /*.zip
