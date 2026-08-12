@@ -326,6 +326,10 @@ make -j"$(nproc)" \
     CROSS_COMPILE=aarch64-linux-gnu- \
     KBUILD_BUILD_USER="${KBUILD_BUILD_USER}" \
     KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST}" \
+        HOSTCFLAGS="-I/usr/include/$(gcc -print-multiarch)" \
+    HOSTCC=gcc \
+    HOSTCXX=g++ \
+    HOSTLD=ld \
     CONFIG_SECTION_MISMATCH_WARN_ONLY=y \
     || die "Kernel build failed"
 success "Kernel build complete"
