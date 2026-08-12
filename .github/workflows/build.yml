@@ -3,6 +3,9 @@ name: Build A52s 5G Kernel
 on:
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,7 +26,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential libc6-dev bc bison flex libssl-dev \
             libelf-dev cpio kmod rsync python3 curl unzip zip \
-            device-tree-compiler llvm lld clang
+            device-tree-compiler llvm lld clang gcc-aarch64-linux-gnu
 
       - name: Make build script executable
         run: chmod +x build_kernel_zip.sh
@@ -44,3 +47,17 @@ jobs:
           name: a52s5g-kernel
           path: ${{ steps.find_zip.outputs.zip_path }}
           if-no-files-found: error
+
+      - name: Set release tag
+        id: tag
+        run: echo "tag=build-$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "A52s 5G Kernel - ${{ steps.tag.outputs.tag }}"
+          files: ${{ steps.find_zip.outputs.zip_path }}
+          body: |
+            Automated build from branch `${{ github.ref_name }}`
+            Commit: ${{ github.sha }}
