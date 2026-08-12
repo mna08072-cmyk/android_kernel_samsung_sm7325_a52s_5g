@@ -9,7 +9,7 @@
 #include <linux/susfs_def.h>
 #include <linux/statfs.h>
 
-#define SUSFS_VERSION "v2.1.0"
+#define SUSFS_VERSION "v2.2.0"
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)
 #define SUSFS_VARIANT "NON-GKI"
 #else
@@ -234,11 +234,6 @@ void susfs_show_variant(void __user **user_info);
 void susfs_show_version(void __user **user_info);
 
 void susfs_start_sdcard_monitor_fn(void);
-
-/* try_umount */
-#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
-void susfs_try_umount(uid_t uid);
-#endif
 
 /* susfs_init */
 void susfs_init(void);
