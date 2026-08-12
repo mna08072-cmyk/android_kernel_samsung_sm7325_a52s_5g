@@ -33,6 +33,10 @@ extern bool susfs_is_current_ksu_domain(void);
 extern void setup_selinux(const char *domain, struct cred *cred);
 extern struct cred *ksu_cred;
 
+DEFINE_STATIC_KEY_FALSE(susfs_set_sdcard_android_data_decrypted_key_false);
+DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
+DEFINE_STATIC_KEY_TRUE(susfs_set_uname_key_true);
+
 #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 DEFINE_STATIC_KEY_TRUE(susfs_is_log_enabled);
 #define SUSFS_LOGI(fmt, ...) if (static_branch_likely(&susfs_is_log_enabled)) pr_info("susfs:[%u][%d][%s] " fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
