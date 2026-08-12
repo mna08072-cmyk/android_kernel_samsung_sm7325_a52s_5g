@@ -58,6 +58,7 @@ void generic_fillattr(struct inode *inode, struct kstat *stat)
 	stat->blocks = inode->i_blocks;
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 	susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
+        susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
 #endif
 }
 EXPORT_SYMBOL(generic_fillattr);
@@ -91,7 +92,10 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
 	if (IS_AUTOMOUNT(inode))
 		stat->attributes |= STATX_ATTR_AUTOMOUNT;
 
-	if (inode->i_op->getattr)
+	if (inode->i_op->getattr) {
+                int err = inode->i_op->getattr(path, stat,
+                                               request_mask,
+                                               query_flags);
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
 	{
 		int err = inode->i_op->getattr(path, stat, request_mask,
@@ -104,6 +108,11 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
 		return inode->i_op->getattr(path, stat, request_mask,
 					    query_flags);
 #endif
+                if (!err)
+                        susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
+#endif
+                return err;
+        }
 
 	generic_fillattr(inode, stat);
 	return 0;
