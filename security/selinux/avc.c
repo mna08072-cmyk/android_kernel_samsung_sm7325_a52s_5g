@@ -759,7 +759,7 @@ bypass_orig_flow:
 				audit_log_format(ab, " tsid=%d", susfs_priv_app_sid);
 			else
 				audit_log_format(ab, " tcontext=%s", "u:r:priv_app:s0:c512,c768");
-			goto bypass_orig_flow;
+			goto bypass_orig_flow2;
 		}
 	}
 #endif
@@ -772,7 +772,7 @@ bypass_orig_flow:
 	}
 
 #ifdef CONFIG_KSU_SUSFS
-bypass_orig_flow:
+bypass_orig_flow2:
 #endif
 	audit_log_format(ab, " tclass=%s", secclass_map[sad->tclass-1].name);
 
