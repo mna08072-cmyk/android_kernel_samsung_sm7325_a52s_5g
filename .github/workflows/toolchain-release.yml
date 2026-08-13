@@ -1,0 +1,65 @@
+name: Publish Kernel Toolchain
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Android Clang r530567
+        run: |
+          set -e
+
+          mkdir -p release/toolchain
+
+          curl -L \
+            "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r530567.tar.gz" \
+            -o clang.tar.gz
+
+          tar -xf clang.tar.gz \
+            -C release/toolchain
+
+      - name: Verify clang
+        run: |
+          set -e
+
+          chmod -R +x release/toolchain/bin
+
+          release/toolchain/bin/clang --version
+
+      - name: Package clang toolchain
+        run: |
+          set -e
+
+          tar -czf clang-r530567-linux-x86.tar.gz \
+            -C release \
+            toolchain
+
+      - name: Upload toolchain artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-r530567-linux-x86
+          path: clang-r530567-linux-x86.tar.gz
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: toolchain-r530567
+          name: Android Kernel Clang r530567
+          body: |
+            Android kernel clang toolchain.
+
+            Version:
+            clang-r530567
+
+            Source:
+            Android prebuilts clang
+          files: clang-r530567-linux-x86.tar.gz
