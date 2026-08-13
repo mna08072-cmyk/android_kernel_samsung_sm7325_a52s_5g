@@ -323,6 +323,7 @@ make -j"$(nproc)" \
     CC="${CLANG_DIR}/bin/clang" \
     LLVM=1 \
     LLVM_IAS=1 \
+    KCFLAGS="-Wno-unknown-warning-option" \
     REAL_CC="${CLANG_DIR}/bin/clang" \
     CROSS_COMPILE=aarch64-linux-gnu- \
     CLANG_TRIPLE=aarch64-linux-gnu- \
