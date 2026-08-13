@@ -320,12 +320,19 @@ make -j"$(nproc)" \
     -C "${KERNEL_ROOT}" \
     O="${OUT_DIR}" \
     ARCH=arm64 \
-    CC=clang \
+    CC="${CLANG_DIR}/bin/clang" \
     LLVM=1 \
     LLVM_IAS=1 \
+    KCFLAGS="-Wno-unknown-warning-option" \
+    REAL_CC="${CLANG_DIR}/bin/clang" \
     CROSS_COMPILE=aarch64-linux-gnu- \
+    CLANG_TRIPLE=aarch64-linux-gnu- \
     KBUILD_BUILD_USER="${KBUILD_BUILD_USER}" \
     KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST}" \
+        HOSTCFLAGS="-I/usr/include/$(gcc -print-multiarch)" \
+    HOSTCC=gcc \
+    HOSTCXX=g++ \
+    HOSTLD=ld \
     CONFIG_SECTION_MISMATCH_WARN_ONLY=y \
     || die "Kernel build failed"
 success "Kernel build complete"
@@ -342,7 +349,9 @@ make \
     -C "${KERNEL_ROOT}" \
     O="${OUT_DIR}" \
     ARCH=arm64 \
+    REAL_CC="${CLANG_DIR}/bin/clang" \
     CROSS_COMPILE=aarch64-linux-gnu- \
+    CLANG_TRIPLE=aarch64-linux-gnu- \
     STRIP="${CLANG_DIR}/bin/llvm-strip" \
     INSTALL_MOD_PATH="${MODULES_STAGING}" \
     INSTALL_MOD_STRIP=1 \
