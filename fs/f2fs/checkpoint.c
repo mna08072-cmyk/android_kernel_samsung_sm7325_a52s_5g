@@ -1205,9 +1205,9 @@ static bool __need_flush_quota(struct f2fs_sb_info *sbi)
 					(get_jiffies_64() - start)
 #define sec_dbg_start_jiffies(val) val = get_jiffies_64()
 #else
-#define sec_dbg_inc_cnt(node, type) (0)
-#define sec_dbg_add_time(node, type, start) (0)
-#define sec_dbg_start_jiffies(val) (0)
+#define sec_dbg_inc_cnt(node, type) do { } while (0)
+#define sec_dbg_add_time(node, type, start) do { } while (0)
+#define sec_dbg_start_jiffies(val) do { } while (0)
 #endif
 /*
  * Freeze all the FS-operations for checkpoint.

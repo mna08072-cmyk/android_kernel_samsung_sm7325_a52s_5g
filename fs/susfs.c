@@ -36,6 +36,7 @@
 
 DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
 DEFINE_STATIC_KEY_FALSE(ksu_input_hook_key_false);
+bool susfs_hide_sus_mnts_for_non_su_procs = false;
 
 extern bool susfs_is_current_ksu_domain(void);
 extern void setup_selinux(const char *domain, struct cred *cred);
@@ -43,6 +44,9 @@ extern void setup_selinux(const char *domain, struct cred *cred);
 DEFINE_STATIC_KEY_FALSE(susfs_set_sdcard_android_data_decrypted_key_false);
 DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
 DEFINE_STATIC_KEY_TRUE(susfs_set_uname_key_true);
+DEFINE_STATIC_KEY_TRUE(susfs_set_fake_cmdline_or_bootconfig_key_true);
+DEFINE_STATIC_KEY_TRUE(susfs_avc_log_spoofing_key_true);
+
 
 #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
 DEFINE_STATIC_KEY_TRUE(susfs_log_key);
@@ -1075,6 +1079,8 @@ int susfs_open_redirect_spoof_seq_show(struct inode *inode, int *out_mnt_id, uns
 }
 
 int susfs_open_redirect_spoof_show_map_vma(struct inode *inode, unsigned long *out_ino, dev_t *out_dev, char *spoofed_name) {
+/* callers must hold and release the "susfs_srcu_open_redirect" lock themselves. */
+int susfs_open_redirect_spoof_show_map_vma(struct inode *inode, unsigned long *out_ino, dev_t *out_dev, char **out_spoofed_name) {
 	struct st_susfs_open_redirect_hlist *entry = NULL;
 	int srcu_idx = srcu_read_lock(&susfs_srcu_open_redirect);
 

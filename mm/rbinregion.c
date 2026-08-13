@@ -370,22 +370,22 @@ void show_rbinregin_size(struct seq_file *s)
 {
 	if (s) {
 		seq_printf(s, "rbintotal: %8lu kB\n",
-			   totalrbin_pages << (PAGE_SHIFT - 10));
+			   (unsigned long)(totalrbin_pages << (PAGE_SHIFT - 10)));
 		seq_printf(s, "rbinpool: %8lu kB\n",
-			   atomic_read(&rbin_pool_pages) << (PAGE_SHIFT - 10));
+			   (unsigned long)(atomic_read(&rbin_pool_pages) << (PAGE_SHIFT - 10)));
 		seq_printf(s, "rbinfree: %8lu kB\n",
-			   atomic_read(&rbin_free_pages) << (PAGE_SHIFT - 10));
+			   (unsigned long)(atomic_read(&rbin_free_pages) << (PAGE_SHIFT - 10)));
 		seq_printf(s, "rbincache: %8lu kB\n",
-			   atomic_read(&rbin_cached_pages) << (PAGE_SHIFT - 10));
+			   (unsigned long)(atomic_read(&rbin_cached_pages) << (PAGE_SHIFT - 10)));
 	} else {
 		pr_cont("rbintotal:%lukB ",
-			   totalrbin_pages << (PAGE_SHIFT - 10));
+			   (unsigned long)(totalrbin_pages << (PAGE_SHIFT - 10)));
 		pr_cont("rbinpool:%lukB ",
-			   atomic_read(&rbin_pool_pages) << (PAGE_SHIFT - 10));
+			   (unsigned long)(atomic_read(&rbin_pool_pages) << (PAGE_SHIFT - 10)));
 		pr_cont("rbinfree:%lukB ",
-			   atomic_read(&rbin_free_pages) << (PAGE_SHIFT - 10));
+			   (unsigned long)(atomic_read(&rbin_free_pages) << (PAGE_SHIFT - 10)));
 		pr_cont("rbincache:%lukB ",
-			   atomic_read(&rbin_cached_pages) << (PAGE_SHIFT - 10));
+			   (unsigned long)(atomic_read(&rbin_cached_pages) << (PAGE_SHIFT - 10)));
 	}
 }
 

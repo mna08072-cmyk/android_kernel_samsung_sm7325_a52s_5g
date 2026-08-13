@@ -4187,7 +4187,7 @@ static void addrconf_dad_work(struct work_struct *w)
 
 	ifp->dad_probes--;
 	if (ifp->idev->dev != NULL && !strcmp(ifp->idev->dev->name, "aware_data0")) {
-		pr_info("Reduce wating time from %lu to %lu (HZ=%lu) to send NS for quick transmission for %s\n",
+		pr_info("Reduce wating time from %d to %d (HZ=%d) to send NS for quick transmission for %s\n",
 			NEIGH_VAR(ifp->idev->nd_parms, RETRANS_TIME),
 			NEIGH_VAR(ifp->idev->nd_parms, RETRANS_TIME)/100,
 			HZ,
@@ -4595,7 +4595,7 @@ restart:
 	if (time_before(next_sched, jiffies + ADDRCONF_TIMER_FUZZ_MAX))
 		next_sched = jiffies + ADDRCONF_TIMER_FUZZ_MAX;
 
-	pr_debug("now = %lu, schedule = %lu, rounded schedule = %lu => %lu\n",
+	pr_debug("now = %d, schedule = %d, rounded schedule = %d => %d\n",
 		 now, next, next_sec, next_sched);
 	mod_delayed_work(addrconf_wq, &addr_chk_work, next_sched - now);
 	rcu_read_unlock_bh();
