@@ -33,10 +33,19 @@ jobs:
 
       - name: Setup Android kernel toolchain
         run: |
-          echo "${GITHUB_WORKSPACE}/toolchain/clang/bin" >> $GITHUB_PATH
-          echo "${GITHUB_WORKSPACE}/toolchain/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin" >> $GITHUB_PATH
+          echo "=== Toolchain tree ==="
+          ls -la toolchain || true
+          find toolchain -type f \( -name clang -o -name clang.real -o -name aarch64-linux-android-gcc \) | head -50
+
+          export PATH="${GITHUB_WORKSPACE}/toolchain/clang/bin:${GITHUB_WORKSPACE}/toolchain/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:$PATH"
+
+          echo "=== clang ==="
+          which clang
           clang --version
-          aarch64-linux-android-gcc --version
+
+          echo "=== gcc ==="
+          which aarch64-linux-android-gcc || true
+          aarch64-linux-android-gcc --version || true
 
       - name: Build kernel
         run: yes "" | ./build_kernel_zip.sh
