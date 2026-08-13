@@ -13,6 +13,10 @@ import os
 import sys
 import subprocess
 
+YELLOW='\033[33m'
+RED='\033[31m'
+RESET='\033[0m'
+
 # Note that gcc uses unicode, which may depend on the locale.  TODO:
 # force LANG to be set to en_US.UTF-8 to get consistent warnings.
 
@@ -30,20 +34,32 @@ allowed_warnings = set([
 ofile = None
 
 warning_re = re.compile(r'''(.*/|)([^/]+\.[a-z]+:\d+):(\d+:)? warning:''')
-def interpret_warning(line):
-    """Decode the message from gcc.  The messages we care about have a filename, and a warning"""
-    line = line.rstrip().decode()
-    m = warning_re.match(line)
-    if m and m.group(2) not in allowed_warnings:
-        print("warning:", m.group(2))
+def color_print(text, color):
+    print(color + text + RESET, end="")
 
-        # If there is a warning, remove any object if it exists.
-        if ofile:
-            try:
-                os.remove(ofile)
-            except OSError:
-                pass
-        # sys.exit(1)
+
+def interpret_warning(line):
+    text = line.decode(errors="replace")
+
+    if "warning:" in text:
+        color_print(text, YELLOW)
+        return
+
+    errors = [
+        "error:",
+        "fatal error:",
+        "undefined reference",
+        "cannot find",
+        "No such file"
+    ]
+
+    if any(x in text for x in errors):
+        color_print(text, RED)
+        return
+
+    print(text, end="")
+
+
 
 def run_gcc():
     args = sys.argv[1:]
@@ -60,7 +76,6 @@ def run_gcc():
     try:
         proc = subprocess.Popen(args, stderr=subprocess.PIPE)
         for line in proc.stderr:
-            print(line.decode(), end=' ')
             interpret_warning(line)
 
         result = proc.wait()
