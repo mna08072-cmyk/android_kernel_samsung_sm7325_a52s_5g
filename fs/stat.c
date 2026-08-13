@@ -32,6 +32,10 @@ extern void susfs_sus_kstat_spoof_generic_fillattr(struct inode *inode, struct k
 extern int susfs_get_non_sus_mnt_id_from_mnt(struct mount *orig_mnt);
 #endif
 
+#ifdef CONFIG_KSU_SUSFS_SUS_MOUNT
+extern int susfs_get_non_sus_mnt_id_from_mnt(struct mount *orig_mnt);
+#endif
+
 /**
  * generic_fillattr - Fill in the basic attributes from the inode struct
  * @inode: Inode to use as the source
@@ -57,7 +61,6 @@ void generic_fillattr(struct inode *inode, struct kstat *stat)
 	stat->blksize = i_blocksize(inode);
 	stat->blocks = inode->i_blocks;
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-	susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
         susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
 #endif
 }
@@ -97,17 +100,6 @@ int vfs_getattr_nosec(const struct path *path, struct kstat *stat,
                                                request_mask,
                                                query_flags);
 #ifdef CONFIG_KSU_SUSFS_SUS_KSTAT
-	{
-		int err = inode->i_op->getattr(path, stat, request_mask,
-					    query_flags);
-		if (!err)
-			susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
-		return err;
-	}
-#else
-		return inode->i_op->getattr(path, stat, request_mask,
-					    query_flags);
-#endif
                 if (!err)
                         susfs_sus_kstat_spoof_generic_fillattr(inode, stat);
 #endif
@@ -197,6 +189,7 @@ EXPORT_SYMBOL(vfs_statx_fd);
  * vfs_statx - Get basic and extra attributes by filename
  * @dfd: A file descriptor representing the base dir for a relative filename
  * @filename: The name of the file of interest
+
  * @flags: Flags to control the query
  * @stat: The result structure to fill in.
  * @request_mask: STATX_xxx flags indicating what the caller wants
