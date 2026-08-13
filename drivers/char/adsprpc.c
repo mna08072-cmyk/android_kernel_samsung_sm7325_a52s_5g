@@ -1084,7 +1084,7 @@ skip_buf_cache:
 		if (err) {
 			err = -ECHRNG;
 			ADSPRPC_ERR(
-				"invalid channel 0x%zx set for session\n",
+				"invalid channel 0x%x set for session\n",
 				cid);
 			goto bail;
 		}
@@ -4259,7 +4259,7 @@ static int fastrpc_send_cpuinfo_to_dsp(struct fastrpc_file *fl)
 	if (err) {
 		err = -ECHRNG;
 		ADSPRPC_ERR(
-			"invalid channel 0x%zx set for session\n",
+			"invalid channel 0x%x set for session\n",
 			cid);
 		goto bail;
 	}
@@ -4665,7 +4665,7 @@ static int fastrpc_mmap_on_dsp(struct fastrpc_file *fl, uint32_t flags,
 		if (err) {
 			err = -ECHRNG;
 			ADSPRPC_ERR(
-				"invalid channel 0x%zx set for session\n",
+				"invalid channel 0x%x set for session\n",
 				cid);
 			goto bail;
 		}
@@ -4722,7 +4722,7 @@ static int fastrpc_munmap_on_dsp_rh(struct fastrpc_file *fl, uint64_t phys,
 		if (err) {
 			err = -ECHRNG;
 			ADSPRPC_ERR(
-				"invalid channel 0x%zx set for session\n",
+				"invalid channel 0x%x set for session\n",
 				cid);
 			goto bail;
 		}

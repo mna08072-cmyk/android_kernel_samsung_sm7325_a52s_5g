@@ -868,10 +868,10 @@ static inline void print_block_data(struct super_block *sb, sector_t blocknr,
 		return;
 
 	printk(KERN_ERR "As F2FS-fs error, printing data in hex\n");
-	printk(KERN_ERR " [partition info] s_id : %s, start sector# : %lu\n"
-			, sb->s_id, sb->s_bdev->bd_part->start_sect);
-	printk(KERN_ERR " dump block# : %lu, start offset(byte) : %d\n"
-			, blocknr, start);
+	printk(KERN_ERR " [partition info] s_id : %s, start sector# : %llu\n"
+			, sb->s_id, (unsigned long long)sb->s_bdev->bd_part->start_sect);
+	printk(KERN_ERR " dump block# : %llu, start offset(byte) : %d\n"
+			, (unsigned long long)blocknr, start);
 	printk(KERN_ERR " length(byte) : %d, data_to_dump 0x%p\n"
 			, len, (void *)data_to_dump);
 	if (!list_empty(&sb->s_mounts)) {
@@ -911,7 +911,7 @@ static inline void print_bh(struct super_block *sb, struct buffer_head *bh
 {
 	if (bh) {
 		printk(KERN_ERR " print_bh: bh %p,"
-				" bh->b_size %lu, bh->b_data %p\n",
+				" bh->b_size %zu, bh->b_data %p\n",
 				(void *) bh, bh->b_size, (void *) bh->b_data);
 		print_block_data(sb, bh->b_blocknr, bh->b_data, start, len);
 
@@ -2316,8 +2316,8 @@ static inline void dec_valid_block_count(struct f2fs_sb_info *sbi,
 					sbi->current_reserved_blocks + count);
 	spin_unlock(&sbi->stat_lock);
 	if (unlikely(inode->i_blocks < sectors)) {
-		f2fs_warn(sbi, "Inconsistent i_blocks, ino:%lu, iblocks:%llu, sectors:%llu",
-			  inode->i_ino,
+		f2fs_warn(sbi, "Inconsistent i_blocks, ino:%llu, iblocks:%llu, sectors:%llu",
+			  (unsigned long long)inode->i_ino,
 			  (unsigned long long)inode->i_blocks,
 			  (unsigned long long)sectors);
 		set_sbi_flag(sbi, SBI_NEED_FSCK);
@@ -2569,8 +2569,8 @@ static inline void dec_valid_node_count(struct f2fs_sb_info *sbi,
 		dquot_free_inode(inode);
 	} else {
 		if (unlikely(inode->i_blocks == 0)) {
-			f2fs_warn(sbi, "dec_valid_node_count: inconsistent i_blocks, ino:%lu, iblocks:%llu",
-				  inode->i_ino,
+			f2fs_warn(sbi, "dec_valid_node_count: inconsistent i_blocks, ino:%llu, iblocks:%llu",
+				  (unsigned long long)inode->i_ino,
 				  (unsigned long long)inode->i_blocks);
 			set_sbi_flag(sbi, SBI_NEED_FSCK);
 			return;

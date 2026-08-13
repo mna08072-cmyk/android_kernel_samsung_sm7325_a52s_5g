@@ -391,7 +391,7 @@ static int dek_encrypt_dek(int engine_id, dek_t *plainDek, dek_t *encDek)
 				dek_add_to_log(engine_id, "encrypt failed, no KEK_TYPE_ECDH256_PUB");
 			}
 		// no ECDH, try DH
-		/* no break */
+		/* fall through */
 		case SDPK_ALGOTYPE_ASYMM_DH:
 			kek = get_kek(engine_id, KEK_TYPE_DH_PUB, &ret);
 			if (kek) {
@@ -406,7 +406,7 @@ static int dek_encrypt_dek(int engine_id, dek_t *plainDek, dek_t *encDek)
 				dek_add_to_log(engine_id, "encrypt failed, no KEK_TYPE_DH_PUB");
 			}
 		// no DH, try RSA
-		/* no break */
+		/* fall through */
 		case SDPK_ALGOTYPE_ASYMM_RSA:
 			kek = get_kek(engine_id, KEK_TYPE_RSA_PUB, &ret);
 			if (kek) {
@@ -421,7 +421,7 @@ static int dek_encrypt_dek(int engine_id, dek_t *plainDek, dek_t *encDek)
 				dek_add_to_log(engine_id, "encrypt failed, no KEK_TYPE_RSA_PUB");
 			}
 		// no RSA, return error;
-		/* no break */
+		/* fall through */
 		default:
 			DEK_LOGE("no ASYMM algo registered : %d\n", engine_id);
 			dek_add_to_log(engine_id, "no ASYMM algo supported");
@@ -1093,7 +1093,7 @@ static long dek_do_ioctl_req(unsigned int minor, unsigned int cmd,
 		memset(tempPlain_dek->buf, 0, DEK_MAXLEN);
 
 		if (ret < 0) {
-			DEK_LOGE("DEK_ENCRYPT_DEK: failed to encrypt dek! (err:%d)\n", ret);
+			DEK_LOGE("DEK_ENCRYPT_DEK: failed to encrypt dek! (err:%ld)\n", ret);
 			zero_out((char *)&req, sizeof(dek_arg_encrypt_dek));
 			kzfree(tempPlain_dek);
 			kzfree(tempEnc_dek);
@@ -1162,7 +1162,7 @@ static long dek_do_ioctl_req(unsigned int minor, unsigned int cmd,
 				tempEnc_dek, tempPlain_dek);
 
 		if (ret < 0) {
-			DEK_LOGE("DEK_DECRYPT_DEK: failed to decrypt dek! (err:%d)\n", ret);
+			DEK_LOGE("DEK_DECRYPT_DEK: failed to decrypt dek! (err:%ld)\n", ret);
 			zero_out((char *)&req, sizeof(dek_arg_decrypt_dek));
 			kzfree(tempPlain_dek);
 			kzfree(tempEnc_dek);

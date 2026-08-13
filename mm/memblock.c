@@ -2139,7 +2139,8 @@ static void memblock_memsize_get_kernel_size(unsigned long *text,
 	 */
 #define adj_init_size(start, end, size, pos, adj) \
 	do { \
-		if (start <= pos && pos < end && size > adj) \
+		if ((unsigned long)start <= (unsigned long)pos && \
+        (unsigned long)pos < (unsigned long)end && size > adj) \
 			size -= adj; \
 	} while (0)
 
