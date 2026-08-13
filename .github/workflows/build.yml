@@ -26,26 +26,30 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential libc6-dev bc bison flex libssl-dev \
             libelf-dev cpio kmod rsync python3 curl unzip zip \
-            device-tree-compiler llvm lld clang gcc-aarch64-linux-gnu
+            device-tree-compiler llvm lld clang
 
       - name: Make build script executable
         run: chmod +x build_kernel_zip.sh
 
-      - name: Setup Android kernel toolchain
+      - name: Download clang toolchain release
         run: |
-          echo "=== Toolchain tree ==="
-          ls -la toolchain || true
-          find toolchain -type f \( -name clang -o -name clang.real -o -name aarch64-linux-android-gcc \) | head -50
+          set -e
 
-          export PATH="${GITHUB_WORKSPACE}/toolchain/clang/bin:${GITHUB_WORKSPACE}/toolchain/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin:$PATH"
+          mkdir -p toolchain
 
-          echo "=== clang ==="
-          which clang
+          curl -L \
+            https://github.com/${{ github.repository }}/releases/download/toolchain-r530567/clang-r530567-linux-x86.tar.gz \
+            -o clang.tar.gz
+
+          tar -xzf clang.tar.gz -C toolchain
+
+          mv toolchain/toolchain toolchain/clang
+
+          chmod -R +x toolchain/clang/bin
+
+          echo "${GITHUB_WORKSPACE}/toolchain/clang/bin" >> $GITHUB_PATH
+
           clang --version
-
-          echo "=== gcc ==="
-          which aarch64-linux-android-gcc || true
-          aarch64-linux-android-gcc --version || true
 
       - name: Build kernel
         run: yes "" | ./build_kernel_zip.sh
