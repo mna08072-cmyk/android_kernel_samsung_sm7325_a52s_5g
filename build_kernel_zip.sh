@@ -320,10 +320,12 @@ make -j"$(nproc)" \
     -C "${KERNEL_ROOT}" \
     O="${OUT_DIR}" \
     ARCH=arm64 \
-    CC=clang \
+    CC="${CLANG_DIR}/bin/clang" \
     LLVM=1 \
     LLVM_IAS=1 \
-    CROSS_COMPILE=aarch64-linux-gnu- \
+    REAL_CC="${CLANG_DIR}/bin/clang" \
+    CROSS_COMPILE="${TOOLCHAIN_DIR}/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-" \
+    CLANG_TRIPLE=aarch64-linux-android- \
     KBUILD_BUILD_USER="${KBUILD_BUILD_USER}" \
     KBUILD_BUILD_HOST="${KBUILD_BUILD_HOST}" \
         HOSTCFLAGS="-I/usr/include/$(gcc -print-multiarch)" \
@@ -346,7 +348,9 @@ make \
     -C "${KERNEL_ROOT}" \
     O="${OUT_DIR}" \
     ARCH=arm64 \
-    CROSS_COMPILE=aarch64-linux-gnu- \
+    REAL_CC="${CLANG_DIR}/bin/clang" \
+    CROSS_COMPILE="${TOOLCHAIN_DIR}/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/bin/aarch64-linux-android-" \
+    CLANG_TRIPLE=aarch64-linux-android- \
     STRIP="${CLANG_DIR}/bin/llvm-strip" \
     INSTALL_MOD_PATH="${MODULES_STAGING}" \
     INSTALL_MOD_STRIP=1 \
