@@ -34,8 +34,6 @@
 #include "fuse/fuse_i.h"
 #include "mount.h"
 
-DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
-DEFINE_STATIC_KEY_FALSE(ksu_input_hook_key_false);
 bool susfs_hide_sus_mnts_for_non_su_procs = false;
 
 extern bool susfs_is_current_ksu_domain(void);
@@ -43,15 +41,16 @@ extern void setup_selinux(const char *domain, struct cred *cred);
 
 DEFINE_STATIC_KEY_FALSE(susfs_set_sdcard_android_data_decrypted_key_false);
 DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
-DEFINE_STATIC_KEY_TRUE(susfs_set_uname_key_true);
+DEFINE_STATIC_KEY_FALSE(ksu_input_hook_key_false);
+DEFINE_STATIC_KEY_FALSE(susfs_is_uname_spoof_buffer_set);
 DEFINE_STATIC_KEY_TRUE(susfs_set_fake_cmdline_or_bootconfig_key_true);
 DEFINE_STATIC_KEY_TRUE(susfs_avc_log_spoofing_key_true);
 
 
 #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
-DEFINE_STATIC_KEY_TRUE(susfs_log_key);
-#define SUSFS_LOGI(fmt, ...) if (static_branch_likely(&susfs_log_key)) pr_info("susfs:[%u][%d][%s] " fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
-#define SUSFS_LOGE(fmt, ...) if (static_branch_likely(&susfs_log_key)) pr_err("susfs:[%u][%d][%s]" fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
+DEFINE_STATIC_KEY_TRUE(susfs_is_log_enabled);
+#define SUSFS_LOGI(fmt, ...) if (static_branch_likely(&susfs_is_log_enabled)) pr_info("susfs:[%u][%d][%s] " fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
+#define SUSFS_LOGE(fmt, ...) if (static_branch_likely(&susfs_is_log_enabled)) pr_err("susfs:[%u][%d][%s]" fmt, current_uid().val, current->pid, __func__, ##__VA_ARGS__)
 #else
 #define SUSFS_LOGI(fmt, ...) 
 #define SUSFS_LOGE(fmt, ...) 
@@ -627,7 +626,7 @@ out_spoof_kstat:
 /* spoof_uname */
 #ifdef CONFIG_KSU_SUSFS_SPOOF_UNAME
 static struct st_susfs_uname my_uname = {0};
-DEFINE_STATIC_KEY_TRUE(susfs_set_uname_key_true);
+DEFINE_STATIC_KEY_FALSE(susfs_is_uname_spoof_buffer_set);
 static DEFINE_SEQLOCK(susfs_uname_seqlock);
 
 void susfs_set_uname(void __user **user_info) {
@@ -656,8 +655,8 @@ void susfs_set_uname(void __user **user_info) {
 	}
 	write_sequnlock(&susfs_uname_seqlock);
 
-	if (!static_key_enabled(&susfs_set_uname_key_true))
-		static_branch_enable(&susfs_set_uname_key_true);
+	if (!static_key_enabled(&susfs_is_uname_spoof_buffer_set))
+		static_branch_enable(&susfs_is_uname_spoof_buffer_set);
 
 	SUSFS_LOGI("set spoofed release: '%s', version: '%s'\n",
 				my_uname.release, my_uname.version);
@@ -692,10 +691,10 @@ void susfs_enable_log(void __user **user_info) {
 	}
 
 	if (info.enabled) {
-		static_branch_enable(&susfs_log_key);
+		static_branch_enable(&susfs_is_log_enabled);
 		pr_info("susfs: enable logging to kernel");
 	} else {
-		static_branch_disable(&susfs_log_key);
+		static_branch_disable(&susfs_is_log_enabled);
 		pr_info("susfs: disable logging to kernel");
 	}
 
@@ -1553,7 +1552,7 @@ void susfs_init(void) {
 	static_branch_enable(&ksu_init_rc_hook_key_false);
 	static_branch_enable(&ksu_input_hook_key_false);
 	static_branch_enable(&susfs_set_sdcard_android_data_decrypted_key_false);
-	static_branch_disable(&susfs_set_uname_key_true);
+	static_branch_disable(&susfs_is_uname_spoof_buffer_set);
 	static_branch_disable(&susfs_avc_log_spoofing_key_true);
 	static_branch_disable(&susfs_set_fake_cmdline_or_bootconfig_key_true);
 	SUSFS_LOGI("susfs is initialized! version: " SUSFS_VERSION " \n");
