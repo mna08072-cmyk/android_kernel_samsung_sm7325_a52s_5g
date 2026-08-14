@@ -1,18 +1,73 @@
 name: Build A52s 5G Kernel
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      build_ksu_next_aosp:
+        description: "Build ksu-next-aosp"
+        required: false
+        type: boolean
+        default: false
+
+      build_ksu_next_oneui:
+        description: "Build ksu-next-oneui"
+        required: false
+        type: boolean
+        default: false
+
+      build_ksu_next_susfs_aosp:
+        description: "Build ksu-next-susfs-aosp"
+        required: false
+        type: boolean
+        default: true
+
+      build_ksu_next_susfs_oneui:
+        description: "Build ksu-next-susfs-oneui"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.matrix.outputs.branches }}
+      selected: ${{ steps.matrix.outputs.selected }}
+    steps:
+      - id: matrix
+        shell: bash
+        run: |
+          branches=()
+
+          [ "${{ inputs.build_ksu_next_aosp }}" = "true" ] && branches+=("ksu-next-aosp")
+          [ "${{ inputs.build_ksu_next_oneui }}" = "true" ] && branches+=("ksu-next-oneui")
+          [ "${{ inputs.build_ksu_next_susfs_aosp }}" = "true" ] && branches+=("ksu-next-susfs-aosp")
+          [ "${{ inputs.build_ksu_next_susfs_oneui }}" = "true" ] && branches+=("ksu-next-susfs-oneui")
+
+          if [ ${#branches[@]} -eq 0 ]; then
+            echo "No branch selected"
+            exit 1
+          fi
+
+          MATRIX=$(printf '%s\n' "${branches[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          echo "branches=${MATRIX}" >> $GITHUB_OUTPUT
+          echo "selected=${MATRIX}" >> $GITHUB_OUTPUT
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJSON(needs.prepare.outputs.branches) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ matrix.branch }}
           submodules: recursive
 
       - name: Free up disk space
@@ -94,23 +149,91 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: a52s5g-kernel-KSU-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
+          name: A52s5G-${{ matrix.branch }}-KSU-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
           path: ${{ steps.find_zip.outputs.zip_path }}
           if-no-files-found: error
 
-      - name: Set release tag
-        id: tag
-        run: echo "tag=build-$(date -u +%Y%m%d-%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Build Summary
+        run: |
+          {
+            echo "## A52s 5G Kernel Build"
+            echo ""
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Branch | ${{ matrix.branch }} |"
+            echo "| Commit | ${{ env.KERNEL_COMMIT }} |"
+            echo "| KernelSU-Next | ${{ env.KSU_VER }} |"
+            echo "| SUSFS | ${{ env.SUSFS_VER }} |"
+            echo "| Status | Success |"
+          } >> $GITHUB_STEP_SUMMARY
+
+
+  release:
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files
+
+      - name: Prepare release info
+        id: info
+        run: |
+          TAG="build-$(date -u +%Y%m%d-%H%M%S)"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+          {
+            echo "## A52s 5G Kernel Release"
+            echo ""
+            echo "Automated multi-branch kernel build"
+            echo ""
+            echo "Branches selected:"
+            echo '${{ needs.prepare.outputs.branches }}' | jq -r '.[] | "- " + .'
+            echo ""
+            echo "Build workflow:"
+            echo "${{ github.run_id }}"
+            echo ""
+            echo "Commit:"
+            echo "${{ github.sha }}"
+          } > release_notes.md
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release-upload
+
+          find release-files -type f -name "*.zip" | while read f
+          do
+            cp "$f" release-upload/
+          done
+
+          ls -lh release-upload
+
+
+      - name: Release Summary
+        run: |
+          {
+            echo "# 🚀 A52s 5G Kernel Release"
+            echo ""
+            echo "| Item | Value |"
+            echo "|---|---|"
+            echo "| Workflow | ${{ github.run_id }} |"
+            echo "| Commit | ${{ github.sha }} |"
+            echo "| Branches |"
+            echo '${{ needs.prepare.outputs.branches }}' | jq -r '.[] | "  - " + .'
+            echo "| Status | Success |"
+          } >> $GITHUB_STEP_SUMMARY
+
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: "A52s 5G Kernel - ${{ steps.tag.outputs.tag }}"
-          files: ${{ steps.find_zip.outputs.zip_path }}
-          body: |
-            Automated build from branch `${{ github.ref_name }}`
-            Commit: ${{ github.sha }}
-            KernelSU-Next: `${{ env.KSU_VER }}`
-            SUSFS: `${{ env.SUSFS_VER }}`
-            Commit short: `${{ env.KERNEL_COMMIT }}`
+          tag_name: ${{ steps.info.outputs.tag }}
+          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }}"
+          body_path: release_notes.md
+          files: |
+            release-upload/*.zip
