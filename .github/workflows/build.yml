@@ -118,11 +118,17 @@ jobs:
           echo "CLICOLOR_FORCE=1" >> $GITHUB_ENV
 
 
+      - name: Fetch full submodules
+        run: |
+          git submodule sync --recursive
+          git submodule update --init --recursive
+          git -C KernelSU-Next fetch --tags --force
+
       - name: Detect Kernel Versions
         run: |
           set -e
 
-          KSU_VER=$(git -C KernelSU-Next describe --tags --always 2>/dev/null || true)
+          KSU_VER=$(git -C KernelSU-Next describe --tags --always --long 2>/dev/null || true)
 
           if [ -z "$KSU_VER" ]; then
             KSU_VER=$(git -C drivers/kernelsu describe --tags --always 2>/dev/null || true)
