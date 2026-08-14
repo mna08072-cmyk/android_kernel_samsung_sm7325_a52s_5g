@@ -38,6 +38,8 @@ extern struct cred *ksu_cred;
 DEFINE_STATIC_KEY_FALSE(susfs_set_sdcard_android_data_decrypted_key_false);
 DEFINE_STATIC_KEY_FALSE(ksu_init_rc_hook_key_false);
 DEFINE_STATIC_KEY_TRUE(susfs_set_uname_key_true);
+DEFINE_STATIC_KEY_TRUE(susfs_set_fake_cmdline_or_bootconfig_key_true);
+DEFINE_STATIC_KEY_TRUE(susfs_avc_log_spoofing_key_true);
 
 
 #ifdef CONFIG_KSU_SUSFS_ENABLE_LOG
