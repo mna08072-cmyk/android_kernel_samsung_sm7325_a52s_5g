@@ -86,28 +86,30 @@ else
     SOURCE_IMAGES_DIR="${IMAGES_ONEUI_DIR}"
 fi
 
-# Detect KSU-Next version from submodule tags
-# 'main' and plain 'aosp' branches do not ship KSU-Next
+# Detect KSUN / SUSFS versions
+SUSFS_VERSION="$(grep '#define SUSFS_VERSION' "${KERNEL_ROOT}/include/linux/susfs.h" 2>/dev/null \
+    | awk '{print $3}' \
+    | tr -d '"' \
+    || echo 'unknown')"
+
 NO_KSU_BRANCHES=("main" "aosp")
+
 if [[ " ${NO_KSU_BRANCHES[*]} " == *" ${CURRENT_BRANCH} "* ]]; then
     KSU_VERSION="none"
 else
     KSU_VERSION="$(git -C "${KERNEL_ROOT}/KernelSU-Next" describe --tags --abbrev=0 2>/dev/null \
-        || echo 'unknown')"
+        || echo "git-$(git -C "${KERNEL_ROOT}/KernelSU-Next" rev-parse --short HEAD 2>/dev/null || echo unknown)")"
 fi
 
-# Display string for root solution
-if [[ "$KSU_VERSION" == "none" ]]; then
-    ROOT_DISPLAY="none"
-else
-    ROOT_DISPLAY="KernelSU-Next ${KSU_VERSION}"
-fi
+echo "KSUN_VERSION=${KSU_VERSION}"
+echo "SUSFS_VERSION=${SUSFS_VERSION}"
 
-# ZIP name
+# ─── Generate zip name
+
 if [[ "$KSU_VERSION" == "none" ]]; then
     ZIP_NAME="${AUTHOR}_${BUILD_DATE}_${ROM_TYPE}_${DEVICE}.zip"
 else
-    ZIP_NAME="${AUTHOR}_${BUILD_DATE}_${ROM_TYPE}_KSU-Next-${KSU_VERSION}_${DEVICE}.zip"
+    ZIP_NAME="${AUTHOR}_${BUILD_DATE}_${ROM_TYPE}_KSUN-${KSU_VERSION}_SUSFS-${SUSFS_VERSION}_${DEVICE}.zip"
 fi
 
 # ─── Sanity checks ────────────────────────────────────────────────────────────
