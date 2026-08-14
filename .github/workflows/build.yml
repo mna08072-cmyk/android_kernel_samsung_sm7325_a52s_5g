@@ -137,7 +137,7 @@ jobs:
           echo "KERNEL_COMMIT=${COMMIT}" >> $GITHUB_ENV
 
           echo "========== VERSION INFO =========="
-          echo "KernelSU-Next: ${KSU_VER}"
+          echo "KSUN: ${KSU_VER}"
           echo "SUSFS: ${SUSFS_VER}"
           echo "Commit: ${COMMIT}"
           echo "=================================="
@@ -152,11 +152,22 @@ jobs:
           echo "zip_path=${ZIP_PATH}" >> "$GITHUB_OUTPUT"
           echo "Found: ${ZIP_PATH}"
 
+      - name: Save version info
+        run: |
+          mkdir -p version-info
+          {
+            echo "KSU_VER=${{ env.KSU_VER }}"
+            echo "SUSFS_VER=${{ env.SUSFS_VER }}"
+            echo "COMMIT=${{ env.KERNEL_COMMIT }}"
+          } > version-info/version.txt
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: A52s5G-${{ matrix.branch }}-KSU-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
-          path: ${{ steps.find_zip.outputs.zip_path }}
+          name: A52s5G-${{ matrix.branch }}-KSUN-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
+          path: |
+            ${{ steps.find_zip.outputs.zip_path }}
+            version-info/version.txt
           if-no-files-found: error
 
 
@@ -192,18 +203,11 @@ jobs:
         run: |
           set -e
 
-          git clone --depth=50 "${{ github.server_url }}/${{ github.repository }}" repo
+          VERSION_FILE=$(find release-files -name version.txt | head -1 || true)
 
-          cd repo
-          git checkout "${{ github.sha }}"
-
-          KSU_VER=$(git -C KernelSU-Next describe --tags --always 2>/dev/null || true)
-
-          if [ -z "$KSU_VER" ]; then
-            KSU_VER=$(git -C drivers/kernelsu describe --tags --always 2>/dev/null || true)
+          if [ -f "$VERSION_FILE" ]; then
+            . "$VERSION_FILE"
           fi
-
-          SUSFS_VER=$(grep '#define SUSFS_VERSION' include/linux/susfs.h | awk '{print $3}' | tr -d '"')
 
           echo "KSU_VER=${KSU_VER:-unknown}" >> $GITHUB_ENV
           echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
@@ -228,7 +232,7 @@ jobs:
             echo "Commit:"
             echo "${{ github.sha }}"
             echo ""
-            echo "KernelSU-Next:"
+            echo "KSUN:"
             echo "${{ env.KSU_VER }}"
             echo ""
             echo "SUSFS:"
@@ -266,7 +270,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.info.outputs.tag }}
-          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - KSU-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}"
+          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - KSUN-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}"
           body_path: release_notes.md
           files: |
             release-upload/*.zip
