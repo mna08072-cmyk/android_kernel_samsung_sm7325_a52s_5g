@@ -100,14 +100,14 @@ fi
 if [[ "$KSU_VERSION" == "none" ]]; then
     ROOT_DISPLAY="none"
 else
-    ROOT_DISPLAY="KernelSU-Next ${KSU_VERSION}"
+    ROOT_DISPLAY="KSUN ${KSU_VERSION}"
 fi
 
 # ZIP name
 if [[ "$KSU_VERSION" == "none" ]]; then
     ZIP_NAME="${AUTHOR}_${BUILD_DATE}_${ROM_TYPE}_${DEVICE}.zip"
 else
-    ZIP_NAME="${AUTHOR}_${BUILD_DATE}_${ROM_TYPE}_KSU-Next-${KSU_VERSION}_${DEVICE}.zip"
+    ZIP_NAME="${AUTHOR}_${BUILD_DATE}_${ROM_TYPE}_KSUN-${KSU_VERSION}_${DEVICE}.zip"
 fi
 
 # ─── Sanity checks ────────────────────────────────────────────────────────────
