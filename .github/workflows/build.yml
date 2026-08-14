@@ -188,6 +188,26 @@ jobs:
         with:
           path: release-files
 
+      - name: Detect release versions
+        run: |
+          set -e
+
+          git clone --depth=50 "${{ github.server_url }}/${{ github.repository }}" repo
+
+          cd repo
+          git checkout "${{ github.sha }}"
+
+          KSU_VER=$(git -C KernelSU-Next describe --tags --always 2>/dev/null || true)
+
+          if [ -z "$KSU_VER" ]; then
+            KSU_VER=$(git -C drivers/kernelsu describe --tags --always 2>/dev/null || true)
+          fi
+
+          SUSFS_VER=$(grep '#define SUSFS_VERSION' include/linux/susfs.h | awk '{print $3}' | tr -d '"')
+
+          echo "KSU_VER=${KSU_VER:-unknown}" >> $GITHUB_ENV
+          echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
+
       - name: Prepare release info
         id: info
         run: |
@@ -207,6 +227,12 @@ jobs:
             echo ""
             echo "Commit:"
             echo "${{ github.sha }}"
+            echo ""
+            echo "KernelSU-Next:"
+            echo "${{ env.KSU_VER }}"
+            echo ""
+            echo "SUSFS:"
+            echo "${{ env.SUSFS_VER }}"
           } > release_notes.md
 
       - name: Prepare release files
@@ -240,7 +266,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.info.outputs.tag }}
-          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }}"
+          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - KSU-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}"
           body_path: release_notes.md
           files: |
             release-upload/*.zip
