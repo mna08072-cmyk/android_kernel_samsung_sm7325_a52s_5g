@@ -97,7 +97,7 @@ NO_KSU_BRANCHES=("main" "aosp")
 if [[ " ${NO_KSU_BRANCHES[*]} " == *" ${CURRENT_BRANCH} "* ]]; then
     KSU_VERSION="none"
 else
-    KSU_VERSION="$(git -C "${KERNEL_ROOT}/KernelSU-Next" describe --tags --abbrev=0 2>/dev/null \
+    KSU_VERSION="$(git -C "${KERNEL_ROOT}/KernelSU-Next" describe --tags --always 2>/dev/null \
         || echo "git-$(git -C "${KERNEL_ROOT}/KernelSU-Next" rev-parse --short HEAD 2>/dev/null || echo unknown)")"
 fi
 
