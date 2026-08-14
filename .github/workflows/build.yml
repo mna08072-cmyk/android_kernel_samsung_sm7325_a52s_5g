@@ -27,6 +27,12 @@ on:
         type: boolean
         default: false
 
+      create_release:
+        description: "Create GitHub Release"
+        required: false
+        type: boolean
+        default: true
+
 permissions:
   contents: write
 
@@ -170,6 +176,7 @@ jobs:
 
 
   release:
+    if: ${{ inputs.create_release == true }}
     needs:
       - prepare
       - build
