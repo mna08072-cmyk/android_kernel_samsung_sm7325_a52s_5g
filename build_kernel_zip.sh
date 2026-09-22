@@ -104,6 +104,13 @@ fi
 echo "KSUN_VERSION=${KSU_VERSION}"
 echo "SUSFS_VERSION=${SUSFS_VERSION}"
 
+# Display string for root solution
+if [[ "$KSU_VERSION" == "none" ]]; then
+    ROOT_DISPLAY="none"
+else
+    ROOT_DISPLAY="KSUN ${KSU_VERSION}"
+fi
+
 # ─── Generate zip name
 
 if [[ "$KSU_VERSION" == "none" ]]; then
