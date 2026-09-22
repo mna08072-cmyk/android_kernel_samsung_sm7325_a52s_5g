@@ -27,6 +27,30 @@ on:
         type: boolean
         default: false
 
+      build_resukisu_aosp:
+        description: "Build resukisu-aosp"
+        required: false
+        type: boolean
+        default: false
+
+      build_resukisu_oneui:
+        description: "Build resukisu-oneui"
+        required: false
+        type: boolean
+        default: false
+
+      build_resukisu_susfs_aosp:
+        description: "Build resukisu-susfs-aosp"
+        required: false
+        type: boolean
+        default: true
+
+      build_resukisu_susfs_oneui:
+        description: "Build resukisu-susfs-oneui"
+        required: false
+        type: boolean
+        default: false
+
       create_release:
         description: "Create GitHub Release"
         required: false
@@ -52,6 +76,10 @@ jobs:
           [ "${{ inputs.build_ksu_next_oneui }}" = "true" ] && branches+=("ksu-next-oneui")
           [ "${{ inputs.build_ksu_next_susfs_aosp }}" = "true" ] && branches+=("ksu-next-susfs-aosp")
           [ "${{ inputs.build_ksu_next_susfs_oneui }}" = "true" ] && branches+=("ksu-next-susfs-oneui")
+          [ "${{ inputs.build_resukisu_aosp }}" = "true" ] && branches+=("resukisu-aosp")
+          [ "${{ inputs.build_resukisu_oneui }}" = "true" ] && branches+=("resukisu-oneui")
+          [ "${{ inputs.build_resukisu_susfs_aosp }}" = "true" ] && branches+=("resukisu-susfs-aosp")
+          [ "${{ inputs.build_resukisu_susfs_oneui }}" = "true" ] && branches+=("resukisu-susfs-oneui")
 
           if [ ${#branches[@]} -eq 0 ]; then
             echo "No branch selected"
@@ -124,28 +152,67 @@ jobs:
         run: |
           set -e
 
-          KSU_VER=$(git -C KernelSU-Next describe --tags --always 2>/dev/null || true)
-
-          if [ -z "$KSU_VER" ]; then
-            KSU_VER=$(git -C drivers/kernelsu describe --tags --always 2>/dev/null || true)
+          # Select the root-solution submodule dir from the matrix branch:
+          # resukisu* branches ship ReSukiSU in KernelSU/, everything else
+          # ships KernelSU-Next in KernelSU-Next/.
+          if [[ "${{ matrix.branch }}" == resukisu* ]]; then
+            KSU_DIR="KernelSU"
+            ROOT_NAME="ReSukiSU"
+          else
+            KSU_DIR="KernelSU-Next"
+            ROOT_NAME="KSUN"
           fi
 
-          SUSFS_VER=$(grep '#define SUSFS_VERSION' include/linux/susfs.h | awk '{print $3}' | tr -d '"')
+          KSU_VER=$(git -C "$KSU_DIR" describe --tags --always 2>/dev/null || echo unknown)
+
+          if [ -z "$KSU_VER" ] || [ "$KSU_VER" = "unknown" ]; then
+            KSU_VER=$(git -C drivers/kernelsu describe --tags --always 2>/dev/null || echo unknown)
+          fi
+
+          # susfs.h is absent on non-SUSFS branches (e.g. resukisu-aosp):
+          # silence the grep and tolerate no match so this step never
+          # fails here; missing version maps to unknown below.
+          SUSFS_VER=$(grep '#define SUSFS_VERSION' include/linux/susfs.h 2>/dev/null | awk '{print $3}' | tr -d '"' || true)
 
           COMMIT=$(git rev-parse --short HEAD)
 
           echo "KSU_VER=${KSU_VER:-unknown}" >> $GITHUB_ENV
           echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
+          echo "ROOT_NAME=${ROOT_NAME}" >> $GITHUB_ENV
           echo "KERNEL_COMMIT=${COMMIT}" >> $GITHUB_ENV
 
           echo "========== VERSION INFO =========="
-          echo "KSUN: ${KSU_VER}"
-          echo "SUSFS: ${SUSFS_VER}"
+          echo "${ROOT_NAME}: ${KSU_VER:-unknown}"
+          echo "SUSFS: ${SUSFS_VER:-unknown}"
           echo "Commit: ${COMMIT}"
           echo "=================================="
 
       - name: Build kernel
-        run: yes "" | ./build_kernel_zip.sh
+        run: |
+          set -e
+          # Fully non-interactive build (replaces the legacy `yes "" |` pipe):
+          # stdin is closed so an unexpected prompt fails fast instead of
+          # hanging; new Kconfig symbols resolve to their defaults via
+          # olddefconfig semantics.
+          ./build_kernel_zip.sh < /dev/null
+
+          # Lock in Kconfig defaults non-interactively (no-op when complete).
+          make -C . O=out ARCH=arm64 olddefconfig
+
+          # Fail-fast: CONFIG_KSU_SUSFS in the generated .config must match
+          # the branch expectation (*susfs* branches require =y, all other
+          # branches require unset/not-y).
+          if [[ "${{ matrix.branch }}" == *susfs* ]]; then
+            grep -q '^CONFIG_KSU_SUSFS=y' out/.config \
+              || { echo "::error::${{ matrix.branch }} requires CONFIG_KSU_SUSFS=y but it is not set"; grep -n 'KSU_SUSFS' out/.config || true; exit 1; }
+          else
+            if grep -q '^CONFIG_KSU_SUSFS=y' out/.config; then
+              echo "::error::${{ matrix.branch }} must not enable CONFIG_KSU_SUSFS"
+              grep -n 'KSU_SUSFS' out/.config || true
+              exit 1
+            fi
+          fi
+          echo "SUSFS config check passed for branch ${{ matrix.branch }}"
 
       - name: Find output zip
         id: find_zip
@@ -160,13 +227,14 @@ jobs:
           {
             echo "KSU_VER=${{ env.KSU_VER }}"
             echo "SUSFS_VER=${{ env.SUSFS_VER }}"
+            echo "ROOT_NAME=${{ env.ROOT_NAME }}"
             echo "COMMIT=${{ env.KERNEL_COMMIT }}"
           } > version-info/version.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: A52s5G-${{ matrix.branch }}-KSUN-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
+          name: A52s5G-${{ matrix.branch }}-${{ env.ROOT_NAME }}-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
           path: |
             ${{ steps.find_zip.outputs.zip_path }}
             version-info/version.txt
@@ -182,7 +250,7 @@ jobs:
             echo "|---|---|"
             echo "| Branch | ${{ matrix.branch }} |"
             echo "| Commit | ${{ env.KERNEL_COMMIT }} |"
-            echo "| KernelSU-Next | ${{ env.KSU_VER }} |"
+            echo "| ${{ env.ROOT_NAME }} | ${{ env.KSU_VER }} |"
             echo "| SUSFS | ${{ env.SUSFS_VER }} |"
             echo "| Status | Success |"
           } >> $GITHUB_STEP_SUMMARY
@@ -214,6 +282,23 @@ jobs:
           echo "KSU_VER=${KSU_VER:-unknown}" >> $GITHUB_ENV
           echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
 
+          # Solution-aware release label derived from the selected branches:
+          # mixed resukisu + ksu-next builds report both solutions,
+          # single-family builds report their own solution name.
+          BRANCHES='${{ needs.prepare.outputs.branches }}'
+          HAS_RESUKISU=""
+          HAS_KSUN=""
+          echo "$BRANCHES" | grep -q 'resukisu' && HAS_RESUKISU=1 || true
+          echo "$BRANCHES" | grep -q 'ksu-next' && HAS_KSUN=1 || true
+          if [ -n "$HAS_RESUKISU" ] && [ -n "$HAS_KSUN" ]; then
+            ROOT_NAME="KSUN-ReSukiSU"
+          elif [ -n "$HAS_RESUKISU" ]; then
+            ROOT_NAME="ReSukiSU"
+          else
+            ROOT_NAME="${ROOT_NAME:-KSUN}"
+          fi
+          echo "ROOT_NAME=${ROOT_NAME}" >> $GITHUB_ENV
+
       - name: Prepare release info
         id: info
         run: |
@@ -234,7 +319,7 @@ jobs:
             echo "Commit:"
             echo "${{ github.sha }}"
             echo ""
-            echo "KSUN:"
+            echo "${{ env.ROOT_NAME }}:"
             echo "${{ env.KSU_VER }}"
             echo ""
             echo "SUSFS:"
@@ -272,7 +357,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.info.outputs.tag }}
-          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - KSUN-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}"
+          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - ${{ env.ROOT_NAME }}-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}"
           body_path: release_notes.md
           files: |
             release-upload/*.zip
