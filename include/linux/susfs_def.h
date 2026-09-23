@@ -88,8 +88,6 @@
 
 #define STATX_SUS_KSTAT 0x10000000U
 #define STATX_SUS_KSTAT_FUSE 0x20000000U
- 
-#define MAGIC_MOUNT_WORKDIR "/debug_ramdisk/workdir"
 
 
 static inline bool susfs_starts_with(const char *str, const char *prefix) {

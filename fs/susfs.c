@@ -382,11 +382,7 @@ void susfs_add_sus_kstat(void __user **user_info) {
 	}
 
 #if defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64)
-#ifdef CONFIG_MIPS
-	info.spoofed_dev = new_decode_dev(info.spoofed_dev);
-#else
 	info.spoofed_dev = huge_decode_dev(info.spoofed_dev);
-#endif /* CONFIG_MIPS */
 #else
 	info.spoofed_dev = old_decode_dev(info.spoofed_dev);
 #endif /* defined(__ARCH_WANT_STAT64) || defined(__ARCH_WANT_COMPAT_STAT64) */
