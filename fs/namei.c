@@ -1696,6 +1696,8 @@ retry:
 	}
 #ifdef CONFIG_KSU_SUSFS_SUS_PATH
 	if (unlikely(dentry) && !IS_ERR(dentry) && dentry->d_inode && !found_sus_path && susfs_is_inode_sus_path(dentry->d_inode)) {
+		bool is_fuse = dentry->d_inode->i_sb->s_magic == FUSE_SUPER_MAGIC;
+
 		if (d_in_lookup(dentry))
 			d_lookup_done(dentry);
 		if (!(flags & LOOKUP_RCU))
@@ -1704,7 +1706,7 @@ retry:
 		//   it is trying to find the fuse sus path with the create flag, then
 		//   at least we can prevent the fake qstr file from from being created,
 		//   although it is futile to do this, it is better than doing nothing.
-		if (dentry->d_inode->i_sb->s_magic == FUSE_SUPER_MAGIC &&
+		if (is_fuse &&
 			(flags & (LOOKUP_CREATE | LOOKUP_EXCL)))
 			return ERR_PTR(-EACCES);
 		dentry = d_alloc(base, &susfs_fake_qstr_name);
