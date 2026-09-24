@@ -63,6 +63,12 @@ on:
         type: boolean
         default: false
 
+      build_kernelsu_susfs_duckfilter:
+        description: "Build kernelsu-susfs-duckfilter (Duck dirty-policy experiment)"
+        required: false
+        type: boolean
+        default: false
+
       create_release:
         description: "Create GitHub Release"
         required: false
@@ -94,6 +100,7 @@ jobs:
           [ "${{ inputs.build_resukisu_susfs_oneui }}" = "true" ] && branches+=("resukisu-susfs-oneui")
           [ "${{ inputs.build_kernelsu_susfs_aosp }}" = "true" ] && branches+=("kernelsu-susfs-aosp")
           [ "${{ inputs.build_kernelsu_susfs_oneui }}" = "true" ] && branches+=("kernelsu-susfs-oneui")
+          [ "${{ inputs.build_kernelsu_susfs_duckfilter }}" = "true" ] && branches+=("kernelsu-susfs-duckfilter")
 
           if [ ${#branches[@]} -eq 0 ]; then
             echo "No branch selected"
