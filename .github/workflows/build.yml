@@ -3,30 +3,6 @@ name: Build A52s 5G Kernel
 on:
   workflow_dispatch:
     inputs:
-      build_ksu_next_aosp:
-        description: "Build ksu-next-aosp"
-        required: false
-        type: boolean
-        default: false
-
-      build_ksu_next_oneui:
-        description: "Build ksu-next-oneui"
-        required: false
-        type: boolean
-        default: false
-
-      build_ksu_next_susfs_aosp:
-        description: "Build ksu-next-susfs-aosp"
-        required: false
-        type: boolean
-        default: true
-
-      build_ksu_next_susfs_oneui:
-        description: "Build ksu-next-susfs-oneui"
-        required: false
-        type: boolean
-        default: false
-
       build_resukisu_aosp:
         description: "Build resukisu-aosp"
         required: false
@@ -47,30 +23,6 @@ on:
 
       build_resukisu_susfs_oneui:
         description: "Build resukisu-susfs-oneui"
-        required: false
-        type: boolean
-        default: false
-
-      build_kernelsu_susfs_aosp:
-        description: "Build kernelsu-susfs-aosp"
-        required: false
-        type: boolean
-        default: false
-
-      build_kernelsu_susfs_oneui:
-        description: "Build kernelsu-susfs-oneui"
-        required: false
-        type: boolean
-        default: false
-
-      build_kernelsu_susfs_duckfilter:
-        description: "Build kernelsu-susfs-duckfilter (Duck dirty-policy experiment)"
-        required: false
-        type: boolean
-        default: false
-
-      build_kernelsu_susfs_duckfilter_oneui:
-        description: "Build kernelsu-susfs-duckfilter-oneui (Duck experiment, OneUI)"
         required: false
         type: boolean
         default: false
@@ -96,18 +48,10 @@ jobs:
         run: |
           branches=()
 
-          [ "${{ inputs.build_ksu_next_aosp }}" = "true" ] && branches+=("ksu-next-aosp")
-          [ "${{ inputs.build_ksu_next_oneui }}" = "true" ] && branches+=("ksu-next-oneui")
-          [ "${{ inputs.build_ksu_next_susfs_aosp }}" = "true" ] && branches+=("ksu-next-susfs-aosp")
-          [ "${{ inputs.build_ksu_next_susfs_oneui }}" = "true" ] && branches+=("ksu-next-susfs-oneui")
           [ "${{ inputs.build_resukisu_aosp }}" = "true" ] && branches+=("resukisu-aosp")
           [ "${{ inputs.build_resukisu_oneui }}" = "true" ] && branches+=("resukisu-oneui")
           [ "${{ inputs.build_resukisu_susfs_aosp }}" = "true" ] && branches+=("resukisu-susfs-aosp")
           [ "${{ inputs.build_resukisu_susfs_oneui }}" = "true" ] && branches+=("resukisu-susfs-oneui")
-          [ "${{ inputs.build_kernelsu_susfs_aosp }}" = "true" ] && branches+=("kernelsu-susfs-aosp")
-          [ "${{ inputs.build_kernelsu_susfs_oneui }}" = "true" ] && branches+=("kernelsu-susfs-oneui")
-          [ "${{ inputs.build_kernelsu_susfs_duckfilter }}" = "true" ] && branches+=("kernelsu-susfs-duckfilter")
-          [ "${{ inputs.build_kernelsu_susfs_duckfilter_oneui }}" = "true" ] && branches+=("kernelsu-susfs-duckfilter-oneui")
 
           if [ ${#branches[@]} -eq 0 ]; then
             echo "No branch selected"
@@ -181,17 +125,10 @@ jobs:
           set -e
 
           # Select the root-solution submodule dir from the matrix branch:
-          # resukisu* branches ship ReSukiSU in KernelSU/,
-          # kernelsu* branches ship tiann KernelSU in KernelSU/,
-          # everything else ships KernelSU-Next in KernelSU-Next/.
-          # NOTE: 'kernelsu-susfs-aosp' does NOT match 'resukisu*'
-          # (prefix 'k' vs 'r'), so resukisu-first ordering is safe.
+          # resukisu* branches ship ReSukiSU in KernelSU/ (only family left).
           if [[ "${{ matrix.branch }}" == resukisu* ]]; then
             KSU_DIR="KernelSU"
             ROOT_NAME="ReSukiSU"
-          elif [[ "${{ matrix.branch }}" == kernelsu* ]]; then
-            KSU_DIR="KernelSU"
-            ROOT_NAME="KernelSU"
           else
             KSU_DIR="KernelSU-Next"
             ROOT_NAME="KSUN"
@@ -317,35 +254,8 @@ jobs:
           echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
 
           # Solution-aware release label derived from the selected branches:
-          # mixed builds report each present solution (KSUN, ReSukiSU,
-          # KernelSU joined with '-'); single-family builds report their
-          # own solution name.
-          # NOTE: 'kernelsu-' (with trailing dash) does NOT occur in any
-          # 'ksu-next*' branch name ('ksu-next-aosp', 'ksu-next-oneui',
-          # 'ksu-next-susfs-aosp', 'ksu-next-susfs-oneui'), so this grep
-          # only matches the tiann kernelsu-susfs-* branches.
-          BRANCHES='${{ needs.prepare.outputs.branches }}'
-          HAS_RESUKISU=""
-          HAS_KSUN=""
-          HAS_KERNELSU=""
-          echo "$BRANCHES" | grep -q 'resukisu' && HAS_RESUKISU=1 || true
-          echo "$BRANCHES" | grep -q 'ksu-next' && HAS_KSUN=1 || true
-          echo "$BRANCHES" | grep -q 'kernelsu-' && HAS_KERNELSU=1 || true
-          if [ -n "$HAS_RESUKISU" ] && [ -n "$HAS_KSUN" ] && [ -n "$HAS_KERNELSU" ]; then
-            ROOT_NAME="KSUN-ReSukiSU-KernelSU"
-          elif [ -n "$HAS_RESUKISU" ] && [ -n "$HAS_KSUN" ]; then
-            ROOT_NAME="KSUN-ReSukiSU"
-          elif [ -n "$HAS_RESUKISU" ] && [ -n "$HAS_KERNELSU" ]; then
-            ROOT_NAME="ReSukiSU-KernelSU"
-          elif [ -n "$HAS_KSUN" ] && [ -n "$HAS_KERNELSU" ]; then
-            ROOT_NAME="KSUN-KernelSU"
-          elif [ -n "$HAS_RESUKISU" ]; then
-            ROOT_NAME="ReSukiSU"
-          elif [ -n "$HAS_KERNELSU" ]; then
-            ROOT_NAME="KernelSU"
-          else
-            ROOT_NAME="${ROOT_NAME:-KSUN}"
-          fi
+          # Only resukisu* branches remain, so the release is always ReSukiSU.
+          ROOT_NAME="ReSukiSU"
           echo "ROOT_NAME=${ROOT_NAME}" >> $GITHUB_ENV
 
       - name: Prepare release info
