@@ -36,6 +36,12 @@ on:
 permissions:
   contents: write
 
+# Audited pins (GKI-style). The build fails fast if a branch carries a
+# different root commit. Update these manually (like GKI pins) together
+# with the submodule gitlink on each branch — never auto-pushed.
+env:
+  PIN_RESUKISU: 0e4698951b8e0e1cb997e46f2049c691869a4f45
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -77,6 +83,24 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           submodules: recursive
+
+      - name: Verify pinned root commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GKI-style pin enforcement: the checked-out branch must carry
+          # exactly the audited PIN_RESUKISU. Mismatch means the branch moved
+          # without a pin update — fail fast instead of building unknown code.
+          if ! [[ "${PIN_RESUKISU}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::PIN_RESUKISU is not a full SHA"
+            exit 2
+          fi
+          ACTUAL="$(git ls-tree HEAD KernelSU | awk '{print $3}')"
+          if [ "$ACTUAL" != "$PIN_RESUKISU" ]; then
+            echo "::error::${{ matrix.branch }} pins ${ACTUAL:-missing}, expected ${PIN_RESUKISU} — update the pin (and submodule) first"
+            exit 1
+          fi
+          echo "Pinned root OK: ${ACTUAL:0:8} on ${{ matrix.branch }}"
 
       - name: Free up disk space
         run: |
