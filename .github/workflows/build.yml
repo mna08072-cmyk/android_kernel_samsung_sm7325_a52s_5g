@@ -33,6 +33,18 @@ on:
         type: boolean
         default: true
 
+      pin_resukisu:
+        description: "Pin ReSukiSU SHA (empty = float to upstream tip)"
+        required: false
+        type: string
+        default: ''
+
+      pin_susfs:
+        description: "Pin Jack mainline SHA (empty = float to upstream tip)"
+        required: false
+        type: string
+        default: ''
+
 permissions:
   contents: write
 
@@ -77,6 +89,86 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           submodules: recursive
+
+      - name: Float ReSukiSU to upstream tip
+        run: |
+          set -euo pipefail
+          RESUK_URL="https://github.com/ReSukiSU/ReSukiSU.git"
+          RESUK_BRANCH="main"
+          if [ -n "${{ inputs.pin_resukisu }}" ]; then
+            RESUK_TIP="${{ inputs.pin_resukisu }}"
+            echo "ReSukiSU pinned via input: ${RESUK_TIP}"
+            git -C KernelSU fetch origin || { echo "::error::ReSukiSU fetch failed"; exit 1; }
+          else
+            RESUK_TIP="$(git ls-remote "$RESUK_URL" "refs/heads/$RESUK_BRANCH" | awk '{print $1; exit}')"
+            echo "ReSukiSU floating to upstream tip: ${RESUK_TIP}"
+            git -C KernelSU fetch --depth=1 origin "$RESUK_BRANCH" || { echo "::error::ReSukiSU fetch failed"; exit 1; }
+            FETCHED="$(git -C KernelSU rev-parse FETCH_HEAD)"
+            if [ "$FETCHED" != "$RESUK_TIP" ]; then
+              echo "::warning::ReSukiSU tip moved during fetch (resolved $RESUK_TIP, fetched $FETCHED); building fetched tip"
+              RESUK_TIP="$FETCHED"
+            fi
+          fi
+          [[ "$RESUK_TIP" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid ReSukiSU SHA: ${RESUK_TIP}"; exit 1; }
+          git -C KernelSU checkout "$RESUK_TIP" || { echo "::error::ReSukiSU checkout failed: ${RESUK_TIP}"; exit 1; }
+          [ "$(git -C KernelSU rev-parse HEAD)" = "$RESUK_TIP" ] || { echo "::error::ReSukiSU rev-parse mismatch"; exit 1; }
+          grep -q '^config KSU_SUSFS' KernelSU/kernel/Kconfig || { echo "::error::Floated ReSukiSU lacks KSU_SUSFS Kconfig symbols"; exit 1; }
+          git config submodule.KernelSU.update none
+          echo "RESUKISU_PIN=${RESUK_TIP}" >> $GITHUB_ENV
+          echo "ReSukiSU now at $(git -C KernelSU rev-parse --short HEAD) $(git -C KernelSU describe --tags --always 2>/dev/null || true)"
+
+      - name: Float SUSFS (fresh tip + maintained port)
+        if: contains(matrix.branch, 'susfs')
+        run: |
+          set -euo pipefail
+          SUSFS_URL="https://github.com/JackA1ltman/NonGKI_Kernel_Build_2nd.git"
+          SUSFS_BRANCH="mainline"
+          SUSFS_SUB="Patches/Patch/susfs_patch_to_5.4.patch"
+          if [ -n "${{ inputs.pin_susfs }}" ]; then
+            SUSFS_TIP="${{ inputs.pin_susfs }}"
+            echo "SUSFS pinned via input: ${SUSFS_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/susfs-src"
+            git clone "$SUSFS_URL" "$RUNNER_TEMP/susfs-src" || { echo "::error::SUSFS clone failed"; exit 1; }
+            git -C "$RUNNER_TEMP/susfs-src" checkout "$SUSFS_TIP" || { echo "::error::SUSFS checkout failed: ${SUSFS_TIP}"; exit 1; }
+          else
+            SUSFS_TIP="$(git ls-remote "$SUSFS_URL" "refs/heads/$SUSFS_BRANCH" | awk '{print $1; exit}')"
+            echo "SUSFS floating to upstream tip: ${SUSFS_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/susfs-src"
+            git clone --depth=1 -b "$SUSFS_BRANCH" "$SUSFS_URL" "$RUNNER_TEMP/susfs-src" || { echo "::error::SUSFS clone failed"; exit 1; }
+            CLONED="$(git -C "$RUNNER_TEMP/susfs-src" rev-parse HEAD)"
+            if [ "$CLONED" != "$SUSFS_TIP" ]; then
+              echo "::warning::SUSFS tip moved during clone (resolved $SUSFS_TIP, cloned $CLONED); building cloned tip"
+              SUSFS_TIP="$CLONED"
+            fi
+          fi
+          [[ "$SUSFS_TIP" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid SUSFS SHA: ${SUSFS_TIP}"; exit 1; }
+          [ "$(git -C "$RUNNER_TEMP/susfs-src" rev-parse HEAD)" = "$SUSFS_TIP" ] || { echo "::error::SUSFS rev-parse mismatch"; exit 1; }
+          PATCH_ABS="$RUNNER_TEMP/susfs-src/$SUSFS_SUB"
+          test -s "$PATCH_ABS" || { echo "::error::SUSFS patch missing in upstream: $SUSFS_SUB"; exit 1; }
+          head -n1 "$PATCH_ABS" | grep -q '^diff --git' || { echo "::error::SUSFS patch header invalid"; exit 1; }
+          SUSFS_VER="$(grep -m1 '#define SUSFS_VERSION' "$PATCH_ABS" | awk -F'"' '{print $2}')"
+          [ -n "$SUSFS_VER" ] || { echo "::error::SUSFS version not found in patch"; exit 1; }
+          git fetch origin main --depth=1 || true
+          for f in integration.patch samsung-delta.patch susfs-defconfig.patch; do
+            git show "origin/main:.github/susfs/maintained/$f" > "$RUNNER_TEMP/$f" || { echo "::error::Maintained $f missing on origin/main"; exit 1; }
+            test -s "$RUNNER_TEMP/$f" || { echo "::error::Maintained $f empty"; exit 1; }
+          done
+          FRESH="$RUNNER_TEMP/susfs-fresh"
+          rm -rf "$FRESH"; mkdir -p "$FRESH"; git init -q "$FRESH"
+          git -C "$FRESH" apply --unsafe-paths --include="fs/susfs.c" --include="include/linux/susfs.h" --include="include/linux/susfs_def.h" "$PATCH_ABS" || { echo "::error::Fresh SUSFS core extraction failed"; exit 1; }
+          for f in fs/susfs.c include/linux/susfs.h include/linux/susfs_def.h; do
+            mkdir -p "$(dirname "$f")"
+            cp "$FRESH/$f" "$f"
+          done
+          git apply --check "$RUNNER_TEMP/samsung-delta.patch" || { echo "::error::Samsung delta does not apply on fresh SUSFS tip ${SUSFS_TIP} - delta needs refresh"; exit 1; }
+          git apply "$RUNNER_TEMP/samsung-delta.patch"
+          git apply --check "$RUNNER_TEMP/integration.patch" || { echo "::error::Maintained integration port does not apply (branch not stripped?)"; exit 1; }
+          git apply "$RUNNER_TEMP/integration.patch"
+          git apply --check "$RUNNER_TEMP/susfs-defconfig.patch" || { echo "::error::SUSFS defconfig patch does not apply"; exit 1; }
+          git apply "$RUNNER_TEMP/susfs-defconfig.patch"
+          echo "SUSFS_TIP=${SUSFS_TIP}" >> $GITHUB_ENV
+          echo "SUSFS_VER=${SUSFS_VER}" >> $GITHUB_ENV
+          echo "SUSFS APPLIED: tip ${SUSFS_TIP} version ${SUSFS_VER}"
 
       - name: Free up disk space
         run: |
