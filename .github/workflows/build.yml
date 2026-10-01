@@ -98,11 +98,11 @@ jobs:
           if [ -n "${{ inputs.pin_resukisu }}" ]; then
             RESUK_TIP="${{ inputs.pin_resukisu }}"
             echo "ReSukiSU pinned via input: ${RESUK_TIP}"
-            git -C KernelSU fetch origin || { echo "::error::ReSukiSU fetch failed"; exit 1; }
+            git -C KernelSU fetch origin --tags --unshallow 2>/dev/null || git -C KernelSU fetch origin --tags || { echo "::error::ReSukiSU fetch failed"; exit 1; }
           else
             RESUK_TIP="$(git ls-remote "$RESUK_URL" "refs/heads/$RESUK_BRANCH" | awk '{print $1; exit}')"
             echo "ReSukiSU floating to upstream tip: ${RESUK_TIP}"
-            git -C KernelSU fetch --depth=1 origin "$RESUK_BRANCH" || { echo "::error::ReSukiSU fetch failed"; exit 1; }
+            git -C KernelSU fetch origin "$RESUK_BRANCH" --tags --unshallow 2>/dev/null || git -C KernelSU fetch origin "$RESUK_BRANCH" --tags || { echo "::error::ReSukiSU fetch failed"; exit 1; }
             FETCHED="$(git -C KernelSU rev-parse FETCH_HEAD)"
             if [ "$FETCHED" != "$RESUK_TIP" ]; then
               echo "::warning::ReSukiSU tip moved during fetch (resolved $RESUK_TIP, fetched $FETCHED); building fetched tip"
