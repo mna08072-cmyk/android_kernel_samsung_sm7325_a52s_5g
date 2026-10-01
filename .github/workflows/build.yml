@@ -45,6 +45,18 @@ on:
         type: string
         default: ''
 
+      use_nomount:
+        description: "Apply NoMount float"
+        required: false
+        type: boolean
+        default: false
+
+      pin_nomount:
+        description: "Pin NoMount dev SHA (empty = float to upstream tip)"
+        required: false
+        type: string
+        default: ''
+
 permissions:
   contents: write
 
@@ -170,6 +182,53 @@ jobs:
           echo "SUSFS_VER=${SUSFS_VER}" >> $GITHUB_ENV
           echo "SUSFS APPLIED: tip ${SUSFS_TIP} version ${SUSFS_VER}"
 
+      - name: Float NoMount (fresh tip, real files)
+        if: ${{ inputs.use_nomount == true }}
+        run: |
+          set -euo pipefail
+          NOMOUNT_URL="https://github.com/maxsteeel/nomount.git"
+          NOMOUNT_BRANCH="dev"
+          if [ -n "${{ inputs.pin_nomount }}" ]; then
+            NOMOUNT_TIP="${{ inputs.pin_nomount }}"
+            echo "NoMount pinned via input: ${NOMOUNT_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/nomount-src"
+            git clone "$NOMOUNT_URL" "$RUNNER_TEMP/nomount-src" || { echo "::error::NoMount clone failed"; exit 1; }
+            git -C "$RUNNER_TEMP/nomount-src" checkout "$NOMOUNT_TIP" || { echo "::error::NoMount checkout failed: ${NOMOUNT_TIP}"; exit 1; }
+          else
+            NOMOUNT_TIP="$(git ls-remote "$NOMOUNT_URL" "refs/heads/$NOMOUNT_BRANCH" | awk '{print $1; exit}')"
+            echo "NoMount floating to upstream tip: ${NOMOUNT_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/nomount-src"
+            git clone --depth=1 -b "$NOMOUNT_BRANCH" "$NOMOUNT_URL" "$RUNNER_TEMP/nomount-src" || { echo "::error::NoMount clone failed"; exit 1; }
+            CLONED="$(git -C "$RUNNER_TEMP/nomount-src" rev-parse HEAD)"
+            if [ "$CLONED" != "$NOMOUNT_TIP" ]; then
+              echo "::warning::NoMount tip moved during clone (resolved $NOMOUNT_TIP, cloned $CLONED); building cloned tip"
+              NOMOUNT_TIP="$CLONED"
+            fi
+          fi
+          [[ "$NOMOUNT_TIP" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid NoMount SHA: ${NOMOUNT_TIP}"; exit 1; }
+          [ "$(git -C "$RUNNER_TEMP/nomount-src" rev-parse HEAD)" = "$NOMOUNT_TIP" ] || { echo "::error::NoMount rev-parse mismatch"; exit 1; }
+          NM_SRC="$RUNNER_TEMP/nomount-src/kernel/src"
+          test -f "$NM_SRC/nomount.c" || { echo "::error::NoMount nomount.c missing in upstream"; exit 1; }
+          grep -q '^config NOMOUNT' "$NM_SRC/Kconfig" || { echo "::error::NoMount Kconfig lacks NOMOUNT symbol"; exit 1; }
+          NOMOUNT_VER="$(grep -m1 '#define NOMOUNT_VERSION' "$NM_SRC/nomount.h" | awk -F'"' '{print $2}')"
+          [ -n "$NOMOUNT_VER" ] || { echo "::error::NoMount version not found in nomount.h"; exit 1; }
+          mkdir -p fs/nomount
+          cp "$NM_SRC/nomount.c" "$NM_SRC/nomount.h" "$NM_SRC/Kconfig" "$NM_SRC/Makefile" fs/nomount/
+          grep -q 'obj-$(CONFIG_NOMOUNT) += nomount/' fs/Makefile || echo 'obj-$(CONFIG_NOMOUNT) += nomount/' >> fs/Makefile
+          if ! grep -q 'source "fs/nomount/Kconfig"' fs/Kconfig; then
+            awk '/^endmenu$/ { last = NR } { lines[NR] = $0 } END { for (i = 1; i <= NR; i++) { if (i == last) print "source \"fs/nomount/Kconfig\""; print lines[i] } }' fs/Kconfig > fs/Kconfig.nomount
+            mv fs/Kconfig.nomount fs/Kconfig
+          fi
+          LAST_ENDMENU="$(grep -n '^endmenu' fs/Kconfig | tail -1 | cut -d: -f1)"
+          SRC_LINE="$(grep -n 'source "fs/nomount/Kconfig"' fs/Kconfig | cut -d: -f1)"
+          LAST_ENDIF="$(grep -n '^endif' fs/Kconfig | tail -1 | cut -d: -f1)"
+          [ -n "$LAST_ENDMENU" ] || { echo "::error::NoMount Kconfig guard failed: no ^endmenu found"; exit 1; }
+          [ "$SRC_LINE" -gt "${LAST_ENDIF:-0}" ] && [ "$SRC_LINE" -lt "$LAST_ENDMENU" ] || { echo "::error::NoMount Kconfig misplaced (source line ${SRC_LINE}, last endif ${LAST_ENDIF:-none}, final endmenu ${LAST_ENDMENU})"; exit 1; }
+          grep -q '^CONFIG_NOMOUNT=y' arch/arm64/configs/vendor/a52sxq_kor_single_defconfig || echo 'CONFIG_NOMOUNT=y' >> arch/arm64/configs/vendor/a52sxq_kor_single_defconfig
+          echo "NOMOUNT_TIP=${NOMOUNT_TIP}" >> $GITHUB_ENV
+          echo "NOMOUNT_VER=${NOMOUNT_VER}" >> $GITHUB_ENV
+          echo "NOMOUNT APPLIED: tip ${NOMOUNT_TIP} version ${NOMOUNT_VER}"
+
       - name: Free up disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
@@ -243,10 +302,17 @@ jobs:
           echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
           echo "ROOT_NAME=${ROOT_NAME}" >> $GITHUB_ENV
           echo "KERNEL_COMMIT=${COMMIT}" >> $GITHUB_ENV
+          echo "RESUKISU_PIN=${RESUKISU_PIN:-unknown}" >> $GITHUB_ENV
+          echo "SUSFS_TIP=${SUSFS_TIP:-none}" >> $GITHUB_ENV
+          echo "NOMOUNT_TIP=${NOMOUNT_TIP:-none}" >> $GITHUB_ENV
+          echo "NOMOUNT_VER=${NOMOUNT_VER:-unknown}" >> $GITHUB_ENV
 
           echo "========== VERSION INFO =========="
           echo "${ROOT_NAME}: ${KSU_VER:-unknown}"
           echo "SUSFS: ${SUSFS_VER:-unknown}"
+          echo "ReSukiSU pin: ${RESUKISU_PIN:-unknown}"
+          echo "SUSFS tip: ${SUSFS_TIP:-none}"
+          echo "NoMount tip: ${NOMOUNT_TIP:-none} version: ${NOMOUNT_VER:-unknown}"
           echo "Commit: ${COMMIT}"
           echo "=================================="
 
@@ -277,6 +343,20 @@ jobs:
           fi
           echo "SUSFS config check passed for branch ${{ matrix.branch }}"
 
+          # Fail-fast: CONFIG_NOMOUNT in the generated .config must match
+          # the use_nomount flag (true requires =y, false requires unset).
+          if [ "${{ inputs.use_nomount }}" = "true" ]; then
+            grep -q '^CONFIG_NOMOUNT=y' out/.config \
+              || { echo "::error::use_nomount=true requires CONFIG_NOMOUNT=y but it is not set"; grep -n 'NOMOUNT' out/.config || true; exit 1; }
+          else
+            if grep -q '^CONFIG_NOMOUNT=y' out/.config; then
+              echo "::error::use_nomount=false must not enable CONFIG_NOMOUNT"
+              grep -n 'NOMOUNT' out/.config || true
+              exit 1
+            fi
+          fi
+          echo "NoMount config check passed (use_nomount=${{ inputs.use_nomount }})"
+
       - name: Find output zip
         id: find_zip
         run: |
@@ -292,12 +372,16 @@ jobs:
             echo "SUSFS_VER=${{ env.SUSFS_VER }}"
             echo "ROOT_NAME=${{ env.ROOT_NAME }}"
             echo "COMMIT=${{ env.KERNEL_COMMIT }}"
+            echo "RESUKISU_PIN=${{ env.RESUKISU_PIN }}"
+            echo "SUSFS_TIP=${{ env.SUSFS_TIP }}"
+            echo "NOMOUNT_TIP=${{ env.NOMOUNT_TIP }}"
+            echo "NOMOUNT_VER=${{ env.NOMOUNT_VER }}"
           } > version-info/version.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: A52s5G-${{ matrix.branch }}-${{ env.ROOT_NAME }}-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}
+          name: A52s5G-${{ matrix.branch }}-${{ env.ROOT_NAME }}-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}-NoMount-${{ env.NOMOUNT_VER }}
           path: |
             ${{ steps.find_zip.outputs.zip_path }}
             version-info/version.txt
@@ -315,6 +399,10 @@ jobs:
             echo "| Commit | ${{ env.KERNEL_COMMIT }} |"
             echo "| ${{ env.ROOT_NAME }} | ${{ env.KSU_VER }} |"
             echo "| SUSFS | ${{ env.SUSFS_VER }} |"
+            echo "| ReSukiSU pin | ${{ env.RESUKISU_PIN }} |"
+            echo "| SUSFS tip | ${{ env.SUSFS_TIP }} |"
+            echo "| NoMount | ${{ env.NOMOUNT_VER }} |"
+            echo "| NoMount tip | ${{ env.NOMOUNT_TIP }} |"
             echo "| Status | Success |"
           } >> $GITHUB_STEP_SUMMARY
 
@@ -344,6 +432,10 @@ jobs:
 
           echo "KSU_VER=${KSU_VER:-unknown}" >> $GITHUB_ENV
           echo "SUSFS_VER=${SUSFS_VER:-unknown}" >> $GITHUB_ENV
+          echo "RESUKISU_PIN=${RESUKISU_PIN:-unknown}" >> $GITHUB_ENV
+          echo "SUSFS_TIP=${SUSFS_TIP:-none}" >> $GITHUB_ENV
+          echo "NOMOUNT_TIP=${NOMOUNT_TIP:-none}" >> $GITHUB_ENV
+          echo "NOMOUNT_VER=${NOMOUNT_VER:-unknown}" >> $GITHUB_ENV
 
           # Solution-aware release label derived from the selected branches:
           # Only resukisu* branches remain, so the release is always ReSukiSU.
@@ -373,8 +465,20 @@ jobs:
             echo "${{ env.ROOT_NAME }}:"
             echo "${{ env.KSU_VER }}"
             echo ""
+            echo "ReSukiSU pin:"
+            echo "${{ env.RESUKISU_PIN }}"
+            echo ""
             echo "SUSFS:"
             echo "${{ env.SUSFS_VER }}"
+            echo ""
+            echo "SUSFS tip:"
+            echo "${{ env.SUSFS_TIP }}"
+            echo ""
+            echo "NoMount:"
+            echo "${{ env.NOMOUNT_VER }}"
+            echo ""
+            echo "NoMount tip:"
+            echo "${{ env.NOMOUNT_TIP }}"
           } > release_notes.md
 
       - name: Prepare release files
@@ -398,6 +502,9 @@ jobs:
             echo "|---|---|"
             echo "| Workflow | ${{ github.run_id }} |"
             echo "| Commit | ${{ github.sha }} |"
+            echo "| ${{ env.ROOT_NAME }} | ${{ env.KSU_VER }} |"
+            echo "| SUSFS | ${{ env.SUSFS_VER }} |"
+            echo "| NoMount | ${{ env.NOMOUNT_VER }} |"
             echo "| Branches |"
             echo '${{ needs.prepare.outputs.branches }}' | jq -r '.[] | "  - " + .'
             echo "| Status | Success |"
@@ -408,7 +515,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.info.outputs.tag }}
-          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - ${{ env.ROOT_NAME }}-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}"
+          name: "A52s 5G Kernel - ${{ steps.info.outputs.tag }} - ${{ env.ROOT_NAME }}-${{ env.KSU_VER }}-SUSFS-${{ env.SUSFS_VER }}-NoMount-${{ env.NOMOUNT_VER }}"
           body_path: release_notes.md
           files: |
             release-upload/*.zip
