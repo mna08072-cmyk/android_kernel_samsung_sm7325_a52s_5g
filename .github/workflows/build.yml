@@ -359,9 +359,10 @@ jobs:
           LAST_ENDIF="$(grep -n '^endif' security/Kconfig | tail -1 | cut -d: -f1 || true)"
           [ -n "$LAST_ENDMENU" ] || { echo "::error::BBG Kconfig guard failed: no ^endmenu found"; exit 1; }
           [ "$SRC_LINE" -gt "${LAST_ENDIF:-0}" ] && [ "$SRC_LINE" -lt "$LAST_ENDMENU" ] || { echo "::error::BBG Kconfig misplaced (source line ${SRC_LINE}, last endif ${LAST_ENDIF:-none}, final endmenu ${LAST_ENDMENU})"; exit 1; }
-          # NOTE: no CONFIG_LSM defaults sed on this 5.4 tree — security/Kconfig
-          # uses the legacy major-choice model (no CONFIG_LSM string); BBG builds
-          # via its legacy kernel_compat.h path (no DEFINE_LSM needed).
+          # This 5.4 tree carries a CONFIG_LSM string and DEFINE_LSM in
+          # include/linux/lsm_hooks.h, so BBG's Makefile gate requires
+          # baseband_guard in CONFIG_LSM (fragment carries the extended
+          # string; setup.sh prints the same instruction).
           BBG_FRAG_SRC="arch/arm64/configs/bbg.config"
           if [ ! -s "$BBG_FRAG_SRC" ]; then
             git fetch origin main --depth=1 || true
@@ -380,6 +381,13 @@ jobs:
                 ;;
               CONFIG_*'=y')
                 SYM="${LINE%'=y'}"
+                sed -i "/^# ${SYM} is not set$/d" "$VENDOR_DEF"
+                sed -i "/^${SYM}=\".*\"$/d" "$VENDOR_DEF"
+                grep -qx "$LINE" "$VENDOR_DEF" || echo "$LINE" >> "$VENDOR_DEF"
+                ;;
+              CONFIG_*'="'*'"')
+                SYM="${LINE%%=*}"
+                sed -i "/^${SYM}=.*$/d" "$VENDOR_DEF"
                 sed -i "/^# ${SYM} is not set$/d" "$VENDOR_DEF"
                 grep -qx "$LINE" "$VENDOR_DEF" || echo "$LINE" >> "$VENDOR_DEF"
                 ;;
@@ -559,6 +567,8 @@ jobs:
           if [ "${{ inputs.use_bbg }}" = "true" ]; then
             grep -q '^CONFIG_BBG=y' out/.config \
               || { echo "::error::use_bbg=true requires CONFIG_BBG=y but it is not set"; grep -n 'BBG' out/.config || true; exit 1; }
+            grep -q 'baseband_guard' out/.config \
+              || { echo "::error::use_bbg=true requires baseband_guard in CONFIG_LSM but it is missing"; grep -n 'CONFIG_LSM' out/.config || true; exit 1; }
           else
             if grep -q '^CONFIG_BBG=y' out/.config; then
               echo "::error::use_bbg=false must not enable CONFIG_BBG"
