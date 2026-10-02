@@ -57,6 +57,36 @@ on:
         type: string
         default: ''
 
+      use_unicode_fix:
+        description: "Apply Unicode bypass fix (WildKernels kernel_patches)"
+        required: false
+        type: boolean
+        default: false
+
+      pin_unicode_fix:
+        description: "Pin kernel_patches main SHA (empty = float to upstream tip)"
+        required: false
+        type: string
+        default: ''
+
+      use_ebpf:
+        description: "Enable eBPF defconfig options (NET_ACT_BPF)"
+        required: false
+        type: boolean
+        default: false
+
+      use_bbg:
+        description: "Apply Baseband-Guard float"
+        required: false
+        type: boolean
+        default: false
+
+      pin_bbg:
+        description: "Pin Baseband-Guard main SHA (empty = float to upstream tip)"
+        required: false
+        type: string
+        default: ''
+
 permissions:
   contents: write
 
@@ -229,6 +259,149 @@ jobs:
           echo "NOMOUNT_VER=${NOMOUNT_VER}" >> $GITHUB_ENV
           echo "NOMOUNT APPLIED: tip ${NOMOUNT_TIP} version ${NOMOUNT_VER}"
 
+      - name: Apply Unicode bypass fix (WildKernels)
+        if: ${{ inputs.use_unicode_fix == true }}
+        run: |
+          set -euo pipefail
+          WK_URL="https://github.com/WildKernels/kernel_patches.git"
+          WK_BRANCH="main"
+          WK_SUB="common/unicode_bypass_fix_6.1-.patch"
+          if [ -n "${{ inputs.pin_unicode_fix }}" ]; then
+            UNICODE_TIP="${{ inputs.pin_unicode_fix }}"
+            echo "Unicode fix pinned via input: ${UNICODE_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/wk-src"
+            git clone "$WK_URL" "$RUNNER_TEMP/wk-src" || { echo "::error::kernel_patches clone failed"; exit 1; }
+            git -C "$RUNNER_TEMP/wk-src" checkout "$UNICODE_TIP" || { echo "::error::kernel_patches checkout failed: ${UNICODE_TIP}"; exit 1; }
+          else
+            UNICODE_TIP="$(git ls-remote "$WK_URL" "refs/heads/$WK_BRANCH" | awk '{print $1; exit}')"
+            echo "Unicode fix floating to upstream tip: ${UNICODE_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/wk-src"
+            git clone --depth=1 -b "$WK_BRANCH" "$WK_URL" "$RUNNER_TEMP/wk-src" || { echo "::error::kernel_patches clone failed"; exit 1; }
+            CLONED="$(git -C "$RUNNER_TEMP/wk-src" rev-parse HEAD)"
+            if [ "$CLONED" != "$UNICODE_TIP" ]; then
+              echo "::warning::kernel_patches tip moved during clone (resolved $UNICODE_TIP, cloned $CLONED); building cloned tip"
+              UNICODE_TIP="$CLONED"
+            fi
+          fi
+          [[ "$UNICODE_TIP" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid kernel_patches SHA: ${UNICODE_TIP}"; exit 1; }
+          [ "$(git -C "$RUNNER_TEMP/wk-src" rev-parse HEAD)" = "$UNICODE_TIP" ] || { echo "::error::kernel_patches rev-parse mismatch"; exit 1; }
+          UPATCH="$RUNNER_TEMP/wk-src/$WK_SUB"
+          test -s "$UPATCH" || { echo "::error::Unicode patch missing in upstream: $WK_SUB"; exit 1; }
+          head -n1 "$UPATCH" | grep -q '^diff --git' || { echo "::error::Unicode patch header invalid"; exit 1; }
+          git apply --check "$UPATCH" || { echo "::error::Unicode patch does not apply on branch ${{ matrix.branch }} tip ${UNICODE_TIP}"; exit 1; }
+          git apply "$UPATCH"
+          grep -q '^CONFIG_UNICODE=y' arch/arm64/configs/vendor/a52sxq_kor_single_defconfig || { echo "::error::Unicode fix requires CONFIG_UNICODE=y in vendor defconfig"; exit 1; }
+          echo "UNICODE_TIP=${UNICODE_TIP}" >> $GITHUB_ENV
+          echo "UNICODE APPLIED: tip ${UNICODE_TIP} file ${WK_SUB}"
+
+      - name: Enable eBPF defconfig options
+        if: ${{ inputs.use_ebpf == true }}
+        run: |
+          set -euo pipefail
+          DEFCONFIG="arch/arm64/configs/vendor/a52sxq_kor_single_defconfig"
+          sed -i '/^CONFIG_NET_ACT_BPF[= ].*/d; /^# CONFIG_NET_ACT_BPF is not set/d' "$DEFCONFIG"
+          grep -qx 'CONFIG_NET_ACT_BPF=y' "$DEFCONFIG" || echo 'CONFIG_NET_ACT_BPF=y' >> "$DEFCONFIG"
+          grep -qx 'CONFIG_NET_ACT_BPF=y' "$DEFCONFIG" || { echo "::error::Failed to enable CONFIG_NET_ACT_BPF"; exit 1; }
+          if grep -q 'CONFIG_BPF_LSM' "$DEFCONFIG"; then
+            echo "::error::Unexpected CONFIG_BPF_LSM symbol in defconfig; BPF_LSM wiring is deferred"
+            exit 1
+          fi
+          echo "::warning::BPF_LSM deferred (needs CONFIG_LSM string change on 5.4 legacy LSM model)"
+          echo "::warning::DEBUG_INFO_BTF deferred (pahole/build-cost)"
+          echo "EBPF APPLIED: CONFIG_NET_ACT_BPF=y"
+
+      - name: Float Baseband-Guard (fresh tip, symlink wire)
+        if: ${{ inputs.use_bbg == true }}
+        run: |
+          set -euo pipefail
+          BBG_URL="https://github.com/vc-teahouse/Baseband-guard.git"
+          BBG_BRANCH="main"
+          if [ -n "${{ inputs.pin_bbg }}" ]; then
+            BBG_TIP="${{ inputs.pin_bbg }}"
+            echo "Baseband-Guard pinned via input: ${BBG_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/bbg-src"
+            git clone "$BBG_URL" "$RUNNER_TEMP/bbg-src" || { echo "::error::Baseband-Guard clone failed"; exit 1; }
+            git -C "$RUNNER_TEMP/bbg-src" checkout "$BBG_TIP" || { echo "::error::Baseband-Guard checkout failed: ${BBG_TIP}"; exit 1; }
+          else
+            BBG_TIP="$(git ls-remote "$BBG_URL" "refs/heads/$BBG_BRANCH" | awk '{print $1; exit}')"
+            echo "Baseband-Guard floating to upstream tip: ${BBG_TIP}"
+            rm -rf "${RUNNER_TEMP:?}/bbg-src"
+            git clone --depth=1 -b "$BBG_BRANCH" "$BBG_URL" "$RUNNER_TEMP/bbg-src" || { echo "::error::Baseband-Guard clone failed"; exit 1; }
+            CLONED="$(git -C "$RUNNER_TEMP/bbg-src" rev-parse HEAD)"
+            if [ "$CLONED" != "$BBG_TIP" ]; then
+              echo "::warning::Baseband-Guard tip moved during clone (resolved $BBG_TIP, cloned $CLONED); building cloned tip"
+              BBG_TIP="$CLONED"
+            fi
+          fi
+          [[ "$BBG_TIP" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Invalid Baseband-Guard SHA: ${BBG_TIP}"; exit 1; }
+          [ "$(git -C "$RUNNER_TEMP/bbg-src" rev-parse HEAD)" = "$BBG_TIP" ] || { echo "::error::Baseband-Guard rev-parse mismatch"; exit 1; }
+          test -f "$RUNNER_TEMP/bbg-src/Kconfig" || { echo "::error::Baseband-Guard Kconfig missing in upstream"; exit 1; }
+          grep -q '^config BBG' "$RUNNER_TEMP/bbg-src/Kconfig" || { echo "::error::Baseband-Guard Kconfig lacks BBG symbol"; exit 1; }
+          test -f "$RUNNER_TEMP/bbg-src/Makefile" || { echo "::error::Baseband-Guard Makefile missing in upstream"; exit 1; }
+          # 5.4 compat: linux/kstrtox.h does not exist on 5.4 (kstrtobool
+          # lives in linux/kernel.h) — drop the include wherever present.
+          if grep -rq '#include <linux/kstrtox.h>' "$RUNNER_TEMP/bbg-src/"; then
+            grep -rl '#include <linux/kstrtox.h>' "$RUNNER_TEMP/bbg-src/" | while read -r f; do
+              sed -i '/#include <linux\/kstrtox.h>/d' "$f"
+            done
+          fi
+          ! grep -rq '#include <linux/kstrtox.h>' "$RUNNER_TEMP/bbg-src/" || { echo "::error::kstrtox.h include still present after compat fix"; exit 1; }
+          ln -sfn "$RUNNER_TEMP/bbg-src" security/baseband-guard
+          test -L security/baseband-guard || { echo "::error::security/baseband-guard symlink missing"; exit 1; }
+          grep -q 'baseband-guard/' security/Makefile || printf '\nobj-$(CONFIG_BBG) += baseband-guard/\n' >> security/Makefile
+          grep -q 'baseband-guard/' security/Makefile || { echo "::error::security/Makefile BBG entry missing"; exit 1; }
+          if ! grep -q 'security/baseband-guard/Kconfig' security/Kconfig; then
+            awk '/^endmenu$/ { last = NR } { lines[NR] = $0 } END { for (i = 1; i <= NR; i++) { if (i == last) print "source \"security/baseband-guard/Kconfig\""; print lines[i] } }' security/Kconfig > security/Kconfig.bbg
+            mv security/Kconfig.bbg security/Kconfig
+          fi
+          LAST_ENDMENU="$(grep -n '^endmenu' security/Kconfig | tail -1 | cut -d: -f1)"
+          SRC_LINE="$(grep -n 'security/baseband-guard/Kconfig' security/Kconfig | cut -d: -f1)"
+          LAST_ENDIF="$(grep -n '^endif' security/Kconfig | tail -1 | cut -d: -f1 || true)"
+          [ -n "$LAST_ENDMENU" ] || { echo "::error::BBG Kconfig guard failed: no ^endmenu found"; exit 1; }
+          [ "$SRC_LINE" -gt "${LAST_ENDIF:-0}" ] && [ "$SRC_LINE" -lt "$LAST_ENDMENU" ] || { echo "::error::BBG Kconfig misplaced (source line ${SRC_LINE}, last endif ${LAST_ENDIF:-none}, final endmenu ${LAST_ENDMENU})"; exit 1; }
+          # NOTE: no CONFIG_LSM defaults sed on this 5.4 tree — security/Kconfig
+          # uses the legacy major-choice model (no CONFIG_LSM string); BBG builds
+          # via its legacy kernel_compat.h path (no DEFINE_LSM needed).
+          BBG_FRAG_SRC="arch/arm64/configs/bbg.config"
+          if [ ! -s "$BBG_FRAG_SRC" ]; then
+            git fetch origin main --depth=1 || true
+            git show "origin/main:arch/arm64/configs/bbg.config" > "$RUNNER_TEMP/bbg.config" || { echo "::error::BBG fragment missing (local + origin/main)"; exit 1; }
+            BBG_FRAG_SRC="$RUNNER_TEMP/bbg.config"
+          fi
+          test -s "$BBG_FRAG_SRC" || { echo "::error::BBG fragment empty"; exit 1; }
+          VENDOR_DEF="arch/arm64/configs/vendor/a52sxq_kor_single_defconfig"
+          test -s "$VENDOR_DEF" || { echo "::error::Vendor defconfig missing: $VENDOR_DEF"; exit 1; }
+          while IFS= read -r LINE || [ -n "$LINE" ]; do
+            case "$LINE" in
+              '# CONFIG_'*' is not set')
+                SYM="${LINE#'# '}"; SYM="${SYM%' is not set'}"
+                sed -i "/^${SYM}=y$/d" "$VENDOR_DEF"
+                grep -qx "$LINE" "$VENDOR_DEF" || echo "$LINE" >> "$VENDOR_DEF"
+                ;;
+              CONFIG_*'=y')
+                SYM="${LINE%'=y'}"
+                sed -i "/^# ${SYM} is not set$/d" "$VENDOR_DEF"
+                grep -qx "$LINE" "$VENDOR_DEF" || echo "$LINE" >> "$VENDOR_DEF"
+                ;;
+              ''|'#'*) continue ;;
+              *) echo "::error::unexpected line in bbg.config: $LINE"; exit 1 ;;
+            esac
+          done < "$BBG_FRAG_SRC"
+          echo "BBG_TIP=${BBG_TIP}" >> $GITHUB_ENV
+          echo "===== BBG APPLIED ====="
+          echo "BBG tip: ${BBG_TIP}"
+          echo "----- BBG symlink -----"
+          ls -la security/baseband-guard || true
+          echo "----- BBG sources present -----"
+          ls security/baseband-guard/Kconfig security/baseband-guard/Makefile security/baseband-guard/baseband_guard.c || true
+          echo "----- BBG Makefile hook -----"
+          grep -n 'baseband-guard/' security/Makefile || true
+          echo "----- BBG Kconfig hook -----"
+          grep -n 'security/baseband-guard/Kconfig' security/Kconfig || true
+          echo "----- CONFIG_BBG in vendor defconfig -----"
+          grep -n 'BBG' "$VENDOR_DEF" || true
+          echo "===== END BBG APPLIED ====="
+
       - name: Free up disk space
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
@@ -306,6 +479,8 @@ jobs:
           echo "SUSFS_TIP=${SUSFS_TIP:-none}" >> $GITHUB_ENV
           echo "NOMOUNT_TIP=${NOMOUNT_TIP:-none}" >> $GITHUB_ENV
           echo "NOMOUNT_VER=${NOMOUNT_VER:-unknown}" >> $GITHUB_ENV
+          echo "UNICODE_TIP=${UNICODE_TIP:-none}" >> $GITHUB_ENV
+          echo "BBG_TIP=${BBG_TIP:-none}" >> $GITHUB_ENV
 
           echo "========== VERSION INFO =========="
           echo "${ROOT_NAME}: ${KSU_VER:-unknown}"
@@ -313,6 +488,9 @@ jobs:
           echo "ReSukiSU pin: ${RESUKISU_PIN:-unknown}"
           echo "SUSFS tip: ${SUSFS_TIP:-none}"
           echo "NoMount tip: ${NOMOUNT_TIP:-none} version: ${NOMOUNT_VER:-unknown}"
+          echo "Unicode tip: ${UNICODE_TIP:-none}"
+          echo "Baseband-Guard tip: ${BBG_TIP:-none}"
+          echo "eBPF: ${{ inputs.use_ebpf }}"
           echo "Commit: ${COMMIT}"
           echo "=================================="
 
@@ -357,6 +535,39 @@ jobs:
           fi
           echo "NoMount config check passed (use_nomount=${{ inputs.use_nomount }})"
 
+          # Fail-fast: CONFIG_UNICODE must stay =y (fix needs it) regardless
+          # of the use_unicode_fix flag.
+          grep -q '^CONFIG_UNICODE=y' out/.config \
+            || { echo "::error::CONFIG_UNICODE=y missing in generated .config"; grep -n 'UNICODE' out/.config || true; exit 1; }
+          echo "Unicode config check passed (use_unicode_fix=${{ inputs.use_unicode_fix }})"
+
+          # Fail-fast: CONFIG_NET_ACT_BPF must match the use_ebpf flag.
+          if [ "${{ inputs.use_ebpf }}" = "true" ]; then
+            grep -q '^CONFIG_NET_ACT_BPF=y' out/.config \
+              || { echo "::error::use_ebpf=true requires CONFIG_NET_ACT_BPF=y but it is not set"; grep -n 'NET_ACT_BPF' out/.config || true; exit 1; }
+          else
+            if grep -q '^CONFIG_NET_ACT_BPF=y' out/.config; then
+              echo "::error::use_ebpf=false must not enable CONFIG_NET_ACT_BPF"
+              grep -n 'NET_ACT_BPF' out/.config || true
+              exit 1
+            fi
+          fi
+          echo "eBPF config check passed (use_ebpf=${{ inputs.use_ebpf }})"
+
+          # Fail-fast: CONFIG_BBG in the generated .config must match
+          # the use_bbg flag (true requires =y, false requires unset).
+          if [ "${{ inputs.use_bbg }}" = "true" ]; then
+            grep -q '^CONFIG_BBG=y' out/.config \
+              || { echo "::error::use_bbg=true requires CONFIG_BBG=y but it is not set"; grep -n 'BBG' out/.config || true; exit 1; }
+          else
+            if grep -q '^CONFIG_BBG=y' out/.config; then
+              echo "::error::use_bbg=false must not enable CONFIG_BBG"
+              grep -n 'BBG' out/.config || true
+              exit 1
+            fi
+          fi
+          echo "BBG config check passed (use_bbg=${{ inputs.use_bbg }})"
+
       - name: Find output zip
         id: find_zip
         run: |
@@ -376,6 +587,7 @@ jobs:
             echo "SUSFS_TIP=${{ env.SUSFS_TIP }}"
             echo "NOMOUNT_TIP=${{ env.NOMOUNT_TIP }}"
             echo "NOMOUNT_VER=${{ env.NOMOUNT_VER }}"
+            echo "BBG_TIP=${{ env.BBG_TIP }}"
           } > version-info/version.txt
 
       - name: Upload artifact
@@ -403,6 +615,7 @@ jobs:
             echo "| SUSFS tip | ${{ env.SUSFS_TIP }} |"
             echo "| NoMount | ${{ env.NOMOUNT_VER }} |"
             echo "| NoMount tip | ${{ env.NOMOUNT_TIP }} |"
+            echo "| BBG tip | ${{ env.BBG_TIP }} |"
             echo "| Status | Success |"
           } >> $GITHUB_STEP_SUMMARY
 
@@ -436,6 +649,7 @@ jobs:
           echo "SUSFS_TIP=${SUSFS_TIP:-none}" >> $GITHUB_ENV
           echo "NOMOUNT_TIP=${NOMOUNT_TIP:-none}" >> $GITHUB_ENV
           echo "NOMOUNT_VER=${NOMOUNT_VER:-unknown}" >> $GITHUB_ENV
+          echo "BBG_TIP=${BBG_TIP:-none}" >> $GITHUB_ENV
 
           # Solution-aware release label derived from the selected branches:
           # Only resukisu* branches remain, so the release is always ReSukiSU.
@@ -479,6 +693,9 @@ jobs:
             echo ""
             echo "NoMount tip:"
             echo "${{ env.NOMOUNT_TIP }}"
+            echo ""
+            echo "Baseband-Guard tip:"
+            echo "${{ env.BBG_TIP }}"
           } > release_notes.md
 
       - name: Prepare release files
@@ -505,6 +722,7 @@ jobs:
             echo "| ${{ env.ROOT_NAME }} | ${{ env.KSU_VER }} |"
             echo "| SUSFS | ${{ env.SUSFS_VER }} |"
             echo "| NoMount | ${{ env.NOMOUNT_VER }} |"
+            echo "| BBG tip | ${{ env.BBG_TIP }} |"
             echo "| Branches |"
             echo '${{ needs.prepare.outputs.branches }}' | jq -r '.[] | "  - " + .'
             echo "| Status | Success |"
