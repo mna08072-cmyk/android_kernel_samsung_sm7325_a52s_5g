@@ -1,0 +1,16 @@
+# config-proof.txt — generated 2026-10-02T18:50:07Z
+# defconfig used: arch/arm64/configs/a52sxq_kor_single_bbrv3_defconfig
+#   (worktree copy of vendor/a52sxq_kor_single_defconfig + 5 fragment lines appended;
+#    the 2 "# ... is not set" lines for ADVANCED/FQ were removed first so olddefconfig
+#    accepts the fragment values)
+# commands:
+#   make ARCH=arm64 a52sxq_kor_single_bbrv3_defconfig && make ARCH=arm64 olddefconfig
+# .config grep proof (no drops):
+1023:CONFIG_TCP_CONG_ADVANCED=y
+1025:CONFIG_TCP_CONG_CUBIC=y
+1040:CONFIG_TCP_CONG_BBR3=y
+1044:CONFIG_DEFAULT_TCP_CONG="cubic"
+1359:CONFIG_NET_SCH_FQ=y
+# negative checks (must be empty — NEGCHECK exit=1, i.e. no matches):
+#   grep "CONFIG_TCP_CONG_BBR3 is not set|CONFIG_NET_SCH_FQ is not set|CONFIG_TCP_CONG_ADVANCED is not set" .config
+#   -> (none — no drops)

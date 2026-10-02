@@ -1,0 +1,25 @@
+# build-log-tail.txt — 2026-10-02
+# command: make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- net/ipv4/tcp_bbr3.o net/ipv4/tcp_plb.o
+# compiler: /usr/bin/aarch64-linux-gnu-gcc 14.2.0 (Debian 14.2.0-19) — first choice, no fallback used
+# --- first build tail ---
+  HDRINST usr/include/audio/linux/msm_audio_amrwb.h
+  HDRINST usr/include/audio/linux/msm_audio_g711_dec.h
+  LDS     arch/arm64/kernel/vdso/vdso.lds
+  CC      arch/arm64/kernel/vdso/vgettimeofday.o
+  AS      arch/arm64/kernel/vdso/note.o
+  AS      arch/arm64/kernel/vdso/sigreturn.o
+  LD      arch/arm64/kernel/vdso/vdso.so.dbg
+  VDSOSYM include/generated/vdso-offsets.h
+  CC      net/ipv4/tcp_bbr3.o
+  CC      net/ipv4/tcp_plb.o
+BUILD_EXIT=0
+# --- rebuild after whitespace fixes (touch + same command) tail ---
+  CALL    scripts/checksyscalls.sh
+  CALL    scripts/atomic/check-atomics.sh
+  CC      net/ipv4/tcp_bbr3.o
+  CC      net/ipv4/tcp_plb.o
+BUILD_EXIT=0
+# --- objects (2026-10-02 18:45 UTC) ---
+# -rw-rw-rw- 585784 net/ipv4/tcp_bbr3.o
+# -rw-rw-rw- 397312 net/ipv4/tcp_plb.o
+# errors: none — zero warnings/errors on BBRv3 port files
