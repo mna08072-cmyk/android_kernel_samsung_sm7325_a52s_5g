@@ -67,6 +67,12 @@ UPDATE_BINARY_TEMPLATE="${TEMPLATE_ZIP_DIR}/META-INF/com/google/android/update-b
 # ─── Derived build metadata ───────────────────────────────────────────────────
 BUILD_DATE="$(date +%Y-%m-%d)"
 
+# Kernel base version from the top-level Makefile (VERSION.PATCHLEVEL.SUBLEVEL
+# + EXTRAVERSION). The checked-out branch is the source of truth, so the
+# recovery banner can never show a stale hard-coded version again.
+KERNEL_VERSION="$(awk -F' *= *' '$1=="VERSION" {v=$2} $1=="PATCHLEVEL" {p=$2} $1=="SUBLEVEL" {s=$2} $1=="EXTRAVERSION" {x=$2} END {print v"."p"."s x}' "${KERNEL_ROOT}/Makefile")"
+[[ -n "$KERNEL_VERSION" ]] || die "Failed to derive KERNEL_VERSION from ${KERNEL_ROOT}/Makefile"
+
 # Detect ROM type from current git branch
 CURRENT_BRANCH="$(git -C "${KERNEL_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')"
 case "$CURRENT_BRANCH" in
@@ -167,7 +173,7 @@ fi
 check_file "${KERNEL_ROOT}/arch/arm64/configs/vendor/a52sxq_kor_single_defconfig" "Kernel defconfig"
 
 # Verify update-binary template contains expected placeholders
-for placeholder in "@ROM_DISPLAY@" "@ROOT_DISPLAY@" "@BUILD_DATE@"; do
+for placeholder in "@ROM_DISPLAY@" "@ROOT_DISPLAY@" "@BUILD_DATE@" "@KERNEL_VERSION@" "@CLANG_VERSION@"; do
     grep -q "$placeholder" "$UPDATE_BINARY_TEMPLATE" || {
         echo -e "${RED}${BOLD}[MISSING]${NC} Placeholder ${placeholder} not found in update-binary template"
         PREFLIGHT_FAILED=1
@@ -212,6 +218,12 @@ fi
 "${CLANG_DIR}/bin/ld.lld" --version >/dev/null 2>&1 \
     || die "ld.lld not functional at ${CLANG_DIR}/bin/ld.lld"
 success "Clang toolchain verified"
+
+# Clang major version from the toolchain actually used for this build.
+# Derived here (post-verification) so the recovery banner always matches
+# the real compiler, even after toolchain updates.
+CLANG_VERSION="$("${CLANG_DIR}/bin/clang" --version | grep -oE 'clang version [0-9]+' | head -n1 | awk '{print $3}')"
+[[ -n "$CLANG_VERSION" ]] || die "Failed to derive CLANG_VERSION from ${CLANG_DIR}/bin/clang --version"
 
 # ─── Step 3: Magiskboot ───────────────────────────────────────────────────────
 if [[ -x "$MAGISKBOOT_BIN" ]]; then
@@ -539,6 +551,8 @@ sed -i \
     -e "s|@ROM_DISPLAY@|${ROM_DISPLAY}|g" \
     -e "s|@ROOT_DISPLAY@|${ROOT_DISPLAY}|g" \
     -e "s|@BUILD_DATE@|${BUILD_DATE}|g" \
+    -e "s|@KERNEL_VERSION@|${KERNEL_VERSION}|g" \
+    -e "s|@CLANG_VERSION@|${CLANG_VERSION}|g" \
     "${TMP_ZIP_STAGING}/META-INF/com/google/android/update-binary" \
     || die "Failed to patch update-binary placeholders"
 
